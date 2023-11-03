@@ -41,30 +41,37 @@ void Swine::assert_formula(const Term & t) {
             // TODO add each lemma only once?
             // exp = 0 ==> base^exp = 1
             solver->assert_formula(
-                        solver->make_term(Op(Implies),
-                                          solver->make_term(Op(Equal), exp, zero),
-                                          solver->make_term(Op(Equal), e, one)));
+                        solver->make_term(
+                            Op(Implies),
+                            solver->make_term(Op(Equal), exp, zero),
+                            solver->make_term(Op(Equal), e, one)));
             // exp > 0 && base = 0 ==> base^exp = 0
             solver->assert_formula(
-                        solver->make_term(Op(Implies),
-                                          solver->make_term(Op(And),
-                                                            pos,
-                                                            solver->make_term(Op(Equal), base, zero)),
-                                          solver->make_term(Op(Equal), e, zero)));
+                        solver->make_term(
+                            Op(Implies),
+                            solver->make_term(
+                                Op(And),
+                                pos,
+                                solver->make_term(Op(Equal), base, zero)),
+                            solver->make_term(Op(Equal), e, zero)));
             // exp > 0 && base = 1 ==> base^exp = 1
             solver->assert_formula(
-                        solver->make_term(Op(Implies),
-                                          solver->make_term(Op(And),
-                                                            pos,
-                                                            solver->make_term(Op(Equal), base, one)),
-                                          solver->make_term(Op(Equal), e, one)));
+                        solver->make_term(
+                            Op(Implies),
+                            solver->make_term(
+                                Op(And),
+                                pos,
+                                solver->make_term(Op(Equal), base, one)),
+                            solver->make_term(Op(Equal), e, one)));
             // exp > 0 && base > 1 ==> base^exp > exp
             solver->assert_formula(
-                        solver->make_term(Op(Implies),
-                                          solver->make_term(Op(And),
-                                                            pos,
-                                                            solver->make_term(Op(Gt), base, one)),
-                                          solver->make_term(Op(Gt), e, exp)));
+                        solver->make_term(
+                            Op(Implies),
+                            solver->make_term(
+                                Op(And),
+                                pos,
+                                solver->make_term(Op(Gt), base, one)),
+                            solver->make_term(Op(Gt), e, exp)));
         }
     }
 }
@@ -72,36 +79,45 @@ void Swine::assert_formula(const Term & t) {
 Term Swine::secant_lemma(const Term expected, const Term expected_val, const Term exponent, const Term exponent_val, const Term other_exponent, const Term other_exponent_val) {
     const auto factor {solver->make_term(Op(Minus), other_exponent, exponent_val)};
     const auto secant {
-        solver->make_term(Op(Plus),
-                          solver->make_term(Op(Mult),
-                                            solver->make_term(Op(Minus), other_exponent_val, expected_val),
-                                            solver->make_term(Op(Minus), exponent, other_exponent)),
-                          solver->make_term(Op(Mult), other_exponent_val, factor))};
+        solver->make_term(
+                    Op(Plus),
+                    solver->make_term(
+                        Op(Mult),
+                        solver->make_term(Op(Minus), other_exponent_val, expected_val),
+                        solver->make_term(Op(Minus), exponent, other_exponent)),
+                    solver->make_term(Op(Mult), other_exponent_val, factor))};
     Term premise;
     if (cpp_int(other_exponent->to_string()) <= cpp_int(exponent_val->to_string())) {
-        premise = solver->make_term(Op(And),
-                                    solver->make_term(Op(Ge), exponent, other_exponent),
-                                    solver->make_term(Op(Le), exponent, exponent_val));
+        premise = solver->make_term(
+                    Op(And),
+                    solver->make_term(Op(Ge), exponent, other_exponent),
+                    solver->make_term(Op(Le), exponent, exponent_val));
     } else {
-        premise = solver->make_term(Op(And),
-                                    solver->make_term(Op(Le), exponent, other_exponent),
-                                    solver->make_term(Op(Ge), exponent, exponent_val));
+        premise = solver->make_term(
+                    Op(And),
+                    solver->make_term(Op(Le), exponent, other_exponent),
+                    solver->make_term(Op(Ge), exponent, exponent_val));
     }
-    return solver->make_term(Op(Implies),
-                             premise,
-                             solver->make_term(Op(Le),
-                                               solver->make_term(Op(Mult), factor, expected),
-                                               secant));
+    return solver->make_term(
+                Op(Implies),
+                premise,
+                solver->make_term(
+                    Op(Le),
+                    solver->make_term(Op(Mult), factor, expected),
+                    secant));
 }
 
 Term Swine::extra_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2) {
-    return solver->make_term(Op(Implies),
-                             solver->make_term(Op(And),
-                                               solver->make_term(Op(Le),
-                                                                 solver->make_term(0, solver->make_sort(SortKind::INT)),
-                                                                 exponent1),
-                                               solver->make_term(Op(Lt), exponent1, exponent2)),
-                             solver->make_term(Op(Lt), expected1, expected2));
+    return solver->make_term(
+                Op(Implies),
+                solver->make_term(
+                    Op(And),
+                    solver->make_term(
+                        Op(Le),
+                        solver->make_term(0, solver->make_sort(SortKind::INT)),
+                        exponent1),
+                    solver->make_term(Op(Lt), exponent1, exponent2)),
+                solver->make_term(Op(Lt), expected1, expected2));
 }
 
 Result Swine::check_sat() {
@@ -143,31 +159,42 @@ Result Swine::check_sat() {
                             const auto next {solver->make_term(Op(Mult), expected, base)};
                             const auto diff {solver->make_term(Op(Minus), next, expected)};
                             // a line through the current and its successor
-                            const auto tangent {solver->make_term(Op(Plus),
-                                                                  expected,
-                                                                  solver->make_term(Op(Mult),
-                                                                                    diff,
-                                                                                    solver->make_term(Op(Minus), exp, exp_val)))};
+                            const auto tangent {
+                                solver->make_term(
+                                            Op(Plus),
+                                            expected,
+                                            solver->make_term(
+                                                Op(Mult),
+                                                diff,
+                                                solver->make_term(Op(Minus), exp, exp_val)))};
                             if (log) std::cout << solver->make_term(Op(Ge), e, tangent) << std::endl;
-                            solver->assert_formula(solver->make_term(Op(Implies),
-                                                                     solver->make_term(Op(Ge), exp, zero),
-                                                                     solver->make_term(Op(Ge), e, tangent)));
+                            solver->assert_formula(
+                                        solver->make_term(
+                                            Op(Implies),
+                                            solver->make_term(Op(Ge), exp, zero),
+                                            solver->make_term(Op(Ge), e, tangent)));
                             if (ginac_actual > 1) {
                                 // as the actual result is greater than one, expected / base is an integer
                                 const auto prev {solver->make_term(Op(IntDiv), expected, base)};
                                 auto diff {solver->make_term(Op(Minus), expected, prev)};
                                 // a line through the current value and its predecessor
-                                auto tangent {solver->make_term(Op(Plus),
-                                                                prev,
-                                                                solver->make_term(Op(Mult),
-                                                                                  diff,
-                                                                                  solver->make_term(Op(Minus),
-                                                                                                    solver->make_term(Op(Minus), exp, exp_val),
-                                                                                                    one)))};
+                                auto tangent {
+                                    solver->make_term(
+                                                Op(Plus),
+                                                prev,
+                                                solver->make_term(
+                                                    Op(Mult),
+                                                    diff,
+                                                    solver->make_term(
+                                                        Op(Minus),
+                                                        solver->make_term(Op(Minus), exp, exp_val),
+                                                        one)))};
                                 if (log) std::cout << solver->make_term(Op(Ge), e, tangent) << std::endl;
-                                solver->assert_formula(solver->make_term(Op(Implies),
-                                                                         solver->make_term(Op(Ge), exp, zero),
-                                                                         solver->make_term(Op(Ge), e, tangent)));
+                                solver->assert_formula(
+                                            solver->make_term(
+                                                Op(Implies),
+                                                solver->make_term(Op(Ge), exp, zero),
+                                                solver->make_term(Op(Ge), e, tangent)));
                             }
                             sat = false;
                         } else if (ginac_actual > ginac_expected) {
