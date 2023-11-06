@@ -1,18 +1,21 @@
 #include "swine.h"
 
 #include <smt-switch/smtlib_reader.h>
-#include <boost/multiprecision/cpp_int.hpp>
-
-using namespace boost::multiprecision;
-
-int main(int argc, char *argv[]) {
-}
+#include "smt-switch/cvc5_factory.h"
+#include "smt-switch/z3_factory.h"
+//#include "smt-switch/yices2_factory.h"
+#include <boost/algorithm/string.hpp>
+#include <assert.h>
 
 Swine::Swine(const SmtSolver solver):
     AbsSmtSolver(solver->get_solver_enum()),
     solver(solver),
-    exp(solver->make_symbol("exp", solver->make_sort(SortKind::INT, solver->make_sort(SortKind::INT), solver->make_sort(SortKind::INT)))),
-    flattener(solver, exp) {}
+    int_sort(solver->make_sort(SortKind::INT)),
+    exp(solver->make_symbol("exp", solver->make_sort(SortKind::FUNCTION, {int_sort, int_sort, int_sort}))),
+    flattener(solver, exp) {
+    solver->set_opt("produce-models", "true");
+    frames.emplace_back();
+}
 
 void Swine::set_opt(const std::string option, const std::string value) {
     solver->set_opt(option, value);
@@ -27,261 +30,314 @@ void Swine::assert_formula(const Term & t) {
     solver->assert_formula(t);
     const auto exps {flattener.clear_exps()};
     if (!exps.empty()) {
-        auto &set {this->exps.emplace(level, UnorderedTermSet()).first->second};
-        set.insert(exps.begin(), exps.end());
+        auto &frame {frames.emplace_back()};
+        frame.exps.insert(exps.begin(), exps.end());
         for (const auto &e: exps) {
             auto it {e->begin()};
             ++it;
             const auto base {*it};
             ++it;
             const auto exp {*it};
-            const auto zero {solver->make_term(0, solver->make_sort(SortKind::INT))};
-            const auto one {solver->make_term(1, solver->make_sort(SortKind::INT))};
-            const auto pos {solver->make_term(Op(Gt), exp, zero)};
+            const auto zero {make_term(0, int_sort)};
+            const auto one {make_term(1, int_sort)};
+            const auto pos {make_term(Op(Gt), exp, zero)};
             // TODO add each lemma only once?
             // exp = 0 ==> base^exp = 1
             solver->assert_formula(
-                        solver->make_term(
+                        make_term(
                             Op(Implies),
-                            solver->make_term(Op(Equal), exp, zero),
-                            solver->make_term(Op(Equal), e, one)));
+                            make_term(Op(Equal), exp, zero),
+                            make_term(Op(Equal), e, one)));
             // exp > 0 && base = 0 ==> base^exp = 0
             solver->assert_formula(
-                        solver->make_term(
+                        make_term(
                             Op(Implies),
-                            solver->make_term(
+                            make_term(
                                 Op(And),
                                 pos,
-                                solver->make_term(Op(Equal), base, zero)),
-                            solver->make_term(Op(Equal), e, zero)));
+                                make_term(Op(Equal), base, zero)),
+                            make_term(Op(Equal), e, zero)));
             // exp > 0 && base = 1 ==> base^exp = 1
             solver->assert_formula(
-                        solver->make_term(
+                        make_term(
                             Op(Implies),
-                            solver->make_term(
+                            make_term(
                                 Op(And),
                                 pos,
-                                solver->make_term(Op(Equal), base, one)),
-                            solver->make_term(Op(Equal), e, one)));
+                                make_term(Op(Equal), base, one)),
+                            make_term(Op(Equal), e, one)));
             // exp > 0 && base > 1 ==> base^exp > exp
             solver->assert_formula(
-                        solver->make_term(
+                        make_term(
                             Op(Implies),
-                            solver->make_term(
+                            make_term(
                                 Op(And),
                                 pos,
-                                solver->make_term(Op(Gt), base, one)),
-                            solver->make_term(Op(Gt), e, exp)));
+                                make_term(Op(Gt), base, one)),
+                            make_term(Op(Gt), e, exp)));
         }
     }
 }
 
-Term Swine::secant_lemma(const Term expected, const Term expected_val, const Term exponent, const Term exponent_val, const Term other_exponent, const Term other_exponent_val) {
-    const auto factor {solver->make_term(Op(Minus), other_exponent, exponent_val)};
-    const auto secant {
-        solver->make_term(
-                    Op(Plus),
-                    solver->make_term(
-                        Op(Mult),
-                        solver->make_term(Op(Minus), other_exponent_val, expected_val),
-                        solver->make_term(Op(Minus), exponent, other_exponent)),
-                    solver->make_term(Op(Mult), other_exponent_val, factor))};
-    Term premise;
-    if (cpp_int(other_exponent->to_string()) <= cpp_int(exponent_val->to_string())) {
-        premise = solver->make_term(
-                    Op(And),
-                    solver->make_term(Op(Ge), exponent, other_exponent),
-                    solver->make_term(Op(Le), exponent, exponent_val));
-    } else {
-        premise = solver->make_term(
-                    Op(And),
-                    solver->make_term(Op(Le), exponent, other_exponent),
-                    solver->make_term(Op(Ge), exponent, exponent_val));
-    }
-    return solver->make_term(
-                Op(Implies),
-                premise,
-                solver->make_term(
-                    Op(Le),
-                    solver->make_term(Op(Mult), factor, expected),
-                    secant));
+cpp_int value(const Term term) {
+    return cpp_int(term->to_string());
 }
 
-Term Swine::extra_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2) {
-    return solver->make_term(
-                Op(Implies),
-                solver->make_term(
+Term Swine::term(const cpp_int &value) {
+    return solver->make_term(value.str(), int_sort);
+}
+
+long to_int(const std::string &s) {
+    if (s.starts_with("(- ")) {
+        return -to_int(s.substr(3, s.size() - 1));
+    } else {
+        return stol(s);
+    }
+}
+
+std::optional<Swine::EvaluatedExp> Swine::evaluate(const Term exp_expression) const {
+    EvaluatedExp res;
+    res.exp_expression = exp_expression;
+    res.exp_expression_val = value(get_value(exp_expression));
+    auto it {exp_expression->begin()};
+    ++it;
+    res.base = *it;
+    res.base_val = value(get_value(*it));
+    ++it;
+    res.exponent = *it;
+    res.exponent_val = to_int(get_value(*it)->to_string());
+    if (res.exponent_val < 0) {
+        return {};
+    }
+    res.expected_val = boost::multiprecision::pow(res.base_val, res.exponent_val);
+    return res;
+}
+
+Term Swine::secant_lemma(const EvaluatedExp &e, const long other_exponent_val) {
+    const auto other_val {pow(e.base_val, other_exponent_val)};
+    const auto factor {other_exponent_val - e.exponent_val};
+    const auto secant {
+        make_term(
+                    Op(Plus),
+                    make_term(
+                        Op(Mult),
+                        term(other_val - e.expected_val),
+                        make_term(Op(Minus), e.exponent, term(other_exponent_val))),
+                    term(other_val * factor))};
+    Term premise;
+    if (other_exponent_val <= e.exponent_val) {
+        premise = make_term(
                     Op(And),
-                    solver->make_term(
+                    make_term(Op(Ge), e.exponent, term(other_exponent_val)),
+                    make_term(Op(Le), e.exponent, term(e.exponent_val)));
+    } else {
+        premise = make_term(
+                    Op(And),
+                    make_term(Op(Le), e.exponent, term(other_exponent_val)),
+                    make_term(Op(Ge), e.exponent, term(e.exponent_val)));
+    }
+    const auto res {
+        make_term(
+                    Op(Implies),
+                    premise,
+                    make_term(
                         Op(Le),
-                        solver->make_term(0, solver->make_sort(SortKind::INT)),
-                        exponent1),
-                    solver->make_term(Op(Lt), exponent1, exponent2)),
-                solver->make_term(Op(Lt), expected1, expected2));
+                        term(factor * e.expected_val),
+                        secant))};
+    if (log) std::cout << res << std::endl;
+    return res;
+}
+
+std::optional<Term> Swine::extra_refinement(const EvaluatedExp &e1, const EvaluatedExp &e2) {
+    if ((e1.base_val > e2.base_val && e1.exponent_val < e2.exponent_val)
+            || (e1.base_val < e2.base_val && e1.exponent_val > e2.exponent_val)
+            || (e1.base_val == e2.base_val && e1.exponent_val == e2.exponent_val)) {
+        return {};
+    }
+    bool is_smaller = e1.base_val < e2.base_val || e1.exponent_val < e2.exponent_val;
+    const auto [smaller, greater] = is_smaller ? std::pair(e1, e2) : std::pair(e2, e1);
+    Term premise;
+    const Term strict_exp_premise {
+        make_term(
+                    Op(Lt),
+                    smaller.exponent,
+                    greater.exponent)};
+    const Term non_strict_exp_premise {
+        make_term(
+                    Op(Le),
+                    smaller.exponent,
+                    greater.exponent)};
+    if (!smaller.base->is_value() || !greater.base->is_value()) {
+        const Term strict_base_premise {
+            make_term(
+                        Op(Lt),
+                        smaller.base,
+                        greater.base)};
+        const Term non_strict_base_premise {
+            make_term(
+                        Op(Le),
+                        smaller.base,
+                        greater.base)};
+        premise = make_term(
+                    Op(And),
+                    non_strict_base_premise,
+                    non_strict_exp_premise,
+                    make_term(
+                        Op(Or),
+                        strict_base_premise,
+                        strict_exp_premise));
+    } else if (smaller.base_val < greater.base_val) {
+        premise = non_strict_exp_premise;
+    } else {
+        premise = strict_exp_premise;
+    }
+    const auto monotonicity_lemma {
+        make_term(
+                    Op(Implies),
+                    make_term(
+                        Op(And),
+                        make_term(
+                            Op(Le),
+                            term(0),
+                            smaller.exponent),
+                        premise),
+                    make_term(Op(Lt), smaller.exp_expression, greater.exp_expression))};
+    if (log) {
+        std::cout << "monotonicity refinement" << std::endl;
+        std::cout << monotonicity_lemma << std::endl;
+    }
+    return monotonicity_lemma;
 }
 
 Result Swine::check_sat() {
-    const auto zero {solver->make_term(0, solver->make_sort(SortKind::INT))};
-    const auto one {solver->make_term(1, solver->make_sort(SortKind::INT))};
-    const auto int_sort {solver->make_sort(SortKind::INT)};
-    std::unordered_map<Term, std::vector<cpp_int>> secant_points;
+    std::unordered_map<Term, std::vector<long>> secant_points;
     while (true) {
         const auto res {solver->check_sat()};
         if (res.is_unsat()) {
-            if (log) std::cout << "unsat" << std::endl;
             return res;
         } else if (res.is_unknown()) {
-            if (log) std::cout << "unknown" << std::endl;
             return res;
         } else if (res.is_sat()) {
             bool sat {true};
+            if (log) {
+                std::cout << "candidate model:" << std::endl;
+                for (const auto &[key,val]: get_model()) {
+                    std::cout << key << " = " << val << std::endl;
+                }
+            }
+            TermVec lemmas;
             // check if the model can be lifted, add refinement lemmas otherwise
-            for (const auto &[_,es]: exps) {
-                for (const auto &e: es) {
-                    auto it {e->begin()};
-                    ++it;
-                    const auto base {*it};
-                    const cpp_int ginac_base {base->to_string()};
-                    ++it;
-                    const auto exp {*it};
-                    const auto exp_val {solver->get_value(exp)};
-                    // TODO catch exception
-                    const ulong ginac_exp_val {exp_val->to_int()};
+            for (const auto &f: frames) {
+                for (const auto &e: f.exps) {
+                    const auto ee {evaluate(e)};
                     // if the exponent is negative, integer exponentiation is undefined
                     // in smtlib, this means that the result can be arbitrary
-                    if (ginac_exp_val >= 0) {
-                        const cpp_int ginac_actual {solver->get_value(e)->to_string()};
-                        const auto ginac_expected {pow(ginac_base, ginac_exp_val)};
-                        const auto expected {solver->make_term(Op(Pow), base, exp_val)};
-                        if (ginac_actual < ginac_expected) {
+                    if (ee && ee->exponent_val >= 0) {
+                        if (ee->exp_expression_val < ee->expected_val) {
                             if (log) std::cout << "tangent refinement" << std::endl;
                             // the actual value is too small --> add "tangent" refinement lemmas
-                            const auto next {solver->make_term(Op(Mult), expected, base)};
-                            const auto diff {solver->make_term(Op(Minus), next, expected)};
-                            // a line through the current and its successor
+                            const auto next {ee->expected_val * ee->base_val};
+                            const auto diff {next - ee->expected_val};
+                            // a line through the current point and its successor
                             const auto tangent {
-                                solver->make_term(
+                                make_term(
                                             Op(Plus),
-                                            expected,
-                                            solver->make_term(
+                                            term(ee->expected_val),
+                                            make_term(
                                                 Op(Mult),
-                                                diff,
-                                                solver->make_term(Op(Minus), exp, exp_val)))};
-                            if (log) std::cout << solver->make_term(Op(Ge), e, tangent) << std::endl;
-                            solver->assert_formula(
-                                        solver->make_term(
+                                                term(diff),
+                                                make_term(Op(Minus), ee->exponent, term(ee->exponent_val))))};
+                            const auto succ_tangent_lemma {
+                                make_term(
                                             Op(Implies),
-                                            solver->make_term(Op(Ge), exp, zero),
-                                            solver->make_term(Op(Ge), e, tangent)));
-                            if (ginac_actual > 1) {
+                                            make_term(Op(Ge), ee->exponent, term(0)),
+                                            make_term(Op(Ge), e, tangent))
+                            };
+                            if (log) std::cout << succ_tangent_lemma << std::endl;
+                            lemmas.push_back(succ_tangent_lemma);
+                            if (ee->exp_expression_val > 1) {
                                 // as the actual result is greater than one, expected / base is an integer
-                                const auto prev {solver->make_term(Op(IntDiv), expected, base)};
-                                auto diff {solver->make_term(Op(Minus), expected, prev)};
+                                const auto prev {ee->expected_val / ee->base_val};
+                                auto diff {ee->expected_val - prev};
                                 // a line through the current value and its predecessor
                                 auto tangent {
-                                    solver->make_term(
+                                    make_term(
                                                 Op(Plus),
-                                                prev,
-                                                solver->make_term(
+                                                term(prev),
+                                                make_term(
                                                     Op(Mult),
-                                                    diff,
-                                                    solver->make_term(
+                                                    term(diff),
+                                                    make_term(
                                                         Op(Minus),
-                                                        solver->make_term(Op(Minus), exp, exp_val),
-                                                        one)))};
-                                if (log) std::cout << solver->make_term(Op(Ge), e, tangent) << std::endl;
-                                solver->assert_formula(
-                                            solver->make_term(
-                                                Op(Implies),
-                                                solver->make_term(Op(Ge), exp, zero),
-                                                solver->make_term(Op(Ge), e, tangent)));
+                                                        ee->exponent,
+                                                        term(ee->exponent_val - 1))))};
+                                const auto prev_tangent_lemma {
+                                    make_term(
+                                        Op(Implies),
+                                        make_term(Op(Ge), ee->exponent, term(0)),
+                                        make_term(Op(Ge), e, tangent))
+                                };
+                                if (log) std::cout << prev_tangent_lemma << std::endl;
+                                lemmas.push_back(prev_tangent_lemma);
                             }
                             sat = false;
-                        } else if (ginac_actual > ginac_expected) {
+                        } else if (ee->exp_expression_val > ee->expected_val) {
                             if (log) std::cout << "secant refinement" << std::endl;
                             // the actual value is too large --> add secant refinement lemmas
-                            cpp_int ginac_prev {-1};
-                            cpp_int ginac_next {-1};
-                            Term prev;
-                            Term next;
+                            std::optional<long> prev;
+                            std::optional<long> next;
                             // look for the closest existing secant points
-                            auto it {secant_points.emplace(e, std::vector<cpp_int>()).first};
-                            for (const auto &ginac_other: it->second) {
-                                if (ginac_other < ginac_exp_val) {
-                                    if (ginac_other > ginac_prev) {
-                                        ginac_prev = ginac_other;
-                                        prev = solver->make_term(ginac_other.str(), int_sort);
+                            auto it {secant_points.emplace(e, std::vector<long>()).first};
+                            for (const auto &other: it->second) {
+                                if (other < ee->exponent_val) {
+                                    if (!prev || other > *prev) {
+                                        prev = other;
                                     }
-                                } else if (ginac_next < 0 || ginac_other < ginac_next) {
-                                    ginac_next = ginac_other;
-                                    next = solver->make_term(ginac_other.str(), int_sort);
+                                } else if (!next || other < *next) {
+                                    next = other;
                                 }
                             }
-                            // if there are none, use the neighbours
-                            if (ginac_prev < 0) {
-                                prev = solver->make_term(Op(Minus), exp_val, one);
+                            // if there are none, use the neighbors
+                            if (!prev) {
+                                prev = ee->exponent_val - 1;
                             }
-                            if (ginac_next < 0) {
-                                next = solver->make_term(Op(Plus), exp_val, one);
+                            if (!next) {
+                                next = ee->exponent_val + 1;
                             }
                             // store the current secant point
-                            it->second.emplace_back(ginac_exp_val);
-                            const auto prev_val {solver->make_term(Op(Pow), base, prev)};
-                            const auto next_val {solver->make_term(Op(Pow), base, next)};
-                            const auto prev_secant_lemma {secant_lemma(e, expected, exp, exp_val, prev, prev_val)};
-                            const auto next_secant_lemma {secant_lemma(e, expected, exp, exp_val, next, next_val)};
-                            if (log) std::cout << prev_secant_lemma << std::endl;
-                            if (log) std::cout << next_secant_lemma << std::endl;
-                            solver->assert_formula(prev_secant_lemma);
-                            solver->assert_formula(next_secant_lemma);
+                            it->second.emplace_back(ee->exponent_val);
+                            const auto prev_secant_lemma {secant_lemma(*ee, *prev)};
+                            const auto next_secant_lemma {secant_lemma(*ee, *next)};
+                            lemmas.push_back(prev_secant_lemma);
+                            lemmas.push_back(next_secant_lemma);
                             sat = false;
                         }
                     }
                 }
             }
             if (sat) {
-                if (log) std::cout << "sat" << std::endl;
                 return res;
             } else {
                 // search for pairs exp(b,e1), exp(b,e2) whose models violate monotonicity of exp
-                auto outer_it1 {exps.begin()};
-                while (outer_it1 != exps.end()) {
-                    auto inner_it1 {outer_it1->second.begin()};
-                    while (inner_it1 != outer_it1->second.end()) {
-                        const auto e1 {*inner_it1};
-                        auto it1 {e1->begin()};
-                        ++it1;
-                        const auto base1 {*it1};
-                        const cpp_int ginac_base1 {base1->to_string()};
-                        if (ginac_base1 > 1) {
-                            ++it1;
-                            const auto exp1 {*it1};
+                auto outer_it1 {frames.begin()};
+                while (outer_it1 != frames.end()) {
+                    auto inner_it1 {outer_it1->exps.begin()};
+                    while (inner_it1 != outer_it1->exps.end()) {
+                        const auto e1 {evaluate(*inner_it1)};
+                        if (e1 && e1->base_val > 1) {
                             auto outer_it2 = outer_it1;
-                            while (outer_it2 != exps.end()) {
-                                auto inner_it2 {outer_it2->second.begin()};
+                            while (outer_it2 != frames.end()) {
+                                auto inner_it2 {outer_it2->exps.begin()};
                                 if (outer_it1 == outer_it2) {
                                     inner_it2 = inner_it1;
                                     ++inner_it2;
                                 }
-                                while (inner_it2 != outer_it2->second.end()) {
-                                    const auto e2 {*inner_it2};
-                                    auto it2 {e2->begin()};
-                                    ++it2;
-                                    const auto base2 {*it2};
-                                    const cpp_int ginac_base2 {base2->to_string()};
-                                    if (ginac_base1 == ginac_base2) {
-                                        ++it2;
-                                        const auto exp2 {*it2};
-                                        const cpp_int ginac_exp1 {solver->get_value(exp1)->to_string()};
-                                        const cpp_int ginac_exp2 {solver->get_value(exp2)->to_string()};
-                                        const cpp_int ginac_e1 {solver->get_value(e1)->to_string()};
-                                        const cpp_int ginac_e2 {solver->get_value(e2)->to_string()};
-                                        if (ginac_exp1 < ginac_exp2 && ginac_e1 >= ginac_e2) {
-                                            if (log) std::cout << "extra refinement 1" << std::endl;
-                                            solver->assert_formula(extra_refinement(exp1, exp2, e1, e2));
-                                        } else if (ginac_exp2 < ginac_exp1 && ginac_e2 >= ginac_e1) {
-                                            if (log) std::cout << "extra refinement 2" << std::endl;
-                                            solver->assert_formula(extra_refinement(exp2, exp1, e2, e1));
+                                while (inner_it2 != outer_it2->exps.end()) {
+                                    const auto e2 {evaluate(*inner_it2)};
+                                    if (e2 && e2->base_val > 1) {
+                                        const auto monotonicity_lemma {extra_refinement(*e1, *e2)};
+                                        if (monotonicity_lemma) {
+                                            lemmas.push_back(*monotonicity_lemma);
                                         }
                                     }
                                     ++inner_it2;
@@ -293,6 +349,9 @@ Result Swine::check_sat() {
                     }
                     ++outer_it1;
                 }
+            }
+            for (const auto &l: lemmas) {
+                solver->assert_formula(l);
             }
         }
     }
@@ -312,14 +371,15 @@ Result Swine::check_sat_assuming_set(const UnorderedTermSet & assumptions) {
 
 void Swine::push(uint64_t num) {
     solver->push(num);
-    level += num;
+    for (unsigned i = 0; i < num; ++i) {
+        frames.emplace_back();
+    }
 }
 
 void Swine::pop(uint64_t num) {
     solver->pop(num);
     for (unsigned i = 0; i < num; ++i) {
-        exps.erase(level);
-        --level;
+        frames.pop_back();
     }
 }
 
@@ -329,6 +389,23 @@ uint64_t Swine::get_context_level() const {
 
 Term Swine::get_value(const Term & t) const {
     return solver->get_value(t);
+}
+
+UnorderedTermMap Swine::get_model() const {
+    UnorderedTermMap res;
+    bool uf {false};
+    for (const auto &f: frames) {
+        for (const auto &x: f.symbols) {
+            if (!uf && x->get_sort()->get_sort_kind() == SortKind::FUNCTION) {
+                uf = true;
+                std::cerr << "get_model does not support uninterpreted functions at the moment" << std::endl;
+            } else {
+                const auto val {get_value(x)};
+                res.emplace(x, val);
+            }
+        }
+    }
+    return res;
 }
 
 UnorderedTermMap Swine::get_array_values(const Term & arr,
@@ -439,7 +516,9 @@ Term Swine::make_term(const Term & val, const Sort & sort) const {
 }
 
 Term Swine::make_symbol(const std::string name, const Sort & sort) {
-    return solver->make_symbol(name, sort);
+    const auto res {solver->make_symbol(name, sort)};
+    frames.back().symbols.insert(res);
+    return res;
 }
 
 Term Swine::get_symbol(const std::string & name) {
@@ -455,7 +534,11 @@ Term Swine::make_term(Op op, const Term & t) const {
 }
 
 Term Swine::make_term(Op op, const Term & t0, const Term & t1) const {
-    return solver->make_term(op, t0, t1);
+    if (op == Op(Exp)) {
+        return solver->make_term(Op(Apply), exp, t0, t1);
+    } else {
+        return solver->make_term(op, t0, t1);
+    }
 }
 
 Term Swine::make_term(Op op,
@@ -466,15 +549,24 @@ Term Swine::make_term(Op op,
 }
 
 Term Swine::make_term(Op op, const TermVec & terms) const {
-    return solver->make_term(op, terms);
+    if (op == Op(Exp)) {
+        assert(terms.size() == 2);
+        return solver->make_term(Op(Apply), exp, terms[0], terms[1]);
+    } else {
+        return solver->make_term(op, terms);
+    }
 }
 
 void Swine::reset() {
     solver->reset();
+    frames = {};
+    frames.emplace_back();
 }
 
 void Swine::reset_assertions() {
     solver->reset_assertions();
+    frames = {};
+    frames.emplace_back();
 }
 
 Term Swine::substitute(const Term term,
@@ -484,4 +576,42 @@ Term Swine::substitute(const Term term,
 
 void Swine::dump_smt2(std::string filename) const {
     solver->dump_smt2(filename);
+}
+
+int main(int argc, char *argv[]) {
+    int arg = 0;
+    auto get_next = [&]() {
+        if (arg < argc-1) {
+            return argv[++arg];
+        } else {
+            std::cout << "Error: Argument missing for " << argv[arg] << std::endl;
+            exit(1);
+        }
+    };
+    SmtSolver solver;
+    std::optional<std::string> input;
+    while (++arg < argc) {
+        if (boost::iequals(argv[arg], "--solver")) {
+            const std::string solver_str {get_next()};
+            if (boost::iequals(solver_str, "z3")) {
+                solver = smt::Z3SolverFactory::create(false);
+            } else if (boost::iequals(solver_str, "cvc5")) {
+                solver = smt::Cvc5SolverFactory::create(false);
+//            } else if (boost::iequals(solver_str, "yices")) {
+//                solver = smt::Yices2SolverFactory::create(false);
+            } else {
+                throw std::invalid_argument("unknown solver " + solver_str);
+            }
+        } else {
+            input = argv[arg];
+        }
+    }
+    if (!solver) {
+        solver = smt::Z3SolverFactory::create(false);
+    }
+    if (!input) {
+        throw std::invalid_argument("missing input file");
+    }
+    SmtSolver swine = std::make_shared<Swine>(solver);
+    return SmtLibReader(swine).parse(*input);
 }

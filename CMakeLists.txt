@@ -23,6 +23,10 @@ message(STATUS "Compiler cxx flags:" ${CMAKE_CXX_FLAGS})
 
 find_library(SWITCH smt-switch)
 message(STATUS "smt-switch: ${SWITCH}")
+find_library(SWITCH_CVC5 smt-switch-cvc5)
+message(STATUS "smt-switch-cvc5: ${SWITCH_CVC5}")
+find_library(SWITCH_Z3 smt-switch-z3)
+message(STATUS "smt-switch-z3: ${SWITCH_Z3}")
 
 add_executable(${EXECUTABLE} "")
 
@@ -36,4 +40,6 @@ target_sources(${EXECUTABLE} PRIVATE
 include_directories(${INCLUDE_DIRS})
 
 target_link_libraries(${EXECUTABLE}
-  ${SWITCH})
+  ${SWITCH}
+  ${SWITCH_CVC5}
+  ${SWITCH_Z3})

@@ -1,19 +1,36 @@
 #pragma once
 
 #include <smt-switch/solver.h>
+#include <boost/multiprecision/cpp_int.hpp>
 
 #include "term_flattener.h"
 
 using namespace smt;
+using namespace boost::multiprecision;
 
-class Swine: AbsSmtSolver {
+class Swine: public AbsSmtSolver {
+
+    struct Frame {
+        UnorderedTermSet exps;
+        UnorderedTermSet symbols;
+    };
+
+    struct EvaluatedExp {
+        Term exp_expression;
+        cpp_int exp_expression_val;
+        cpp_int expected_val;
+        Term base;
+        cpp_int base_val;
+        Term exponent;
+        long exponent_val;
+    };
 
     SmtSolver solver;
+    Sort int_sort;
     Term exp;
     TermFlattener flattener;
-    std::unordered_map<unsigned, UnorderedTermSet> exps;
-    static const bool log {false};
-    unsigned level;
+    std::vector<Frame> frames;
+    static const bool log {true};
 
 public:
 
@@ -32,6 +49,7 @@ public:
     void pop(uint64_t num = 1) override;
     uint64_t get_context_level() const override;
     Term get_value(const Term & t) const override;
+    UnorderedTermMap get_model() const override;
     UnorderedTermMap get_array_values(const Term & arr,
                                       Term & out_const_base) const override;
     void get_unsat_assumptions(UnorderedTermSet & out) override;
@@ -89,7 +107,10 @@ public:
                     const UnorderedTermMap & substitution_map) const override;
     void dump_smt2(std::string filename) const override;
 
-    Term secant_lemma(const Term expected, const Term expected_val, const Term exponent, const Term exponent_val, const Term other_exponent, const Term other_exponent_val);
-    Term extra_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
+    Term term(const cpp_int &value);
+    std::optional<EvaluatedExp> evaluate(const Term exp_expression) const;
+    Term secant_lemma(const EvaluatedExp &e, const long other_exponent_val);
+    TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
+    std::optional<Term> extra_refinement(const EvaluatedExp &e1, const EvaluatedExp &e2);
 
 };
