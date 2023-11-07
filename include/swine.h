@@ -31,6 +31,7 @@ class Swine: public AbsSmtSolver {
     TermFlattener flattener;
     std::vector<Frame> frames;
     static const bool log {true};
+    std::unordered_map<Term, std::vector<long>> secant_points;
 
 public:
 
@@ -107,10 +108,15 @@ public:
                     const UnorderedTermMap & substitution_map) const override;
     void dump_smt2(std::string filename) const override;
 
+    void add_initial_lemmas(const Term e);
     Term term(const cpp_int &value);
     std::optional<EvaluatedExp> evaluate(const Term exp_expression) const;
+    Term tangent_lemma(const EvaluatedExp &e, const bool next);
+    void tangent_lemmas(const EvaluatedExp &e, TermVec &lemmas);
     Term secant_lemma(const EvaluatedExp &e, const long other_exponent_val);
+    void secant_lemmas(const EvaluatedExp &e, TermVec &lemmas);
     TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
-    std::optional<Term> extra_refinement(const EvaluatedExp &e1, const EvaluatedExp &e2);
+    std::optional<Term> monotonicity_lemma(const EvaluatedExp &e1, const EvaluatedExp &e2);
+    void monotonicity_lemmas(TermVec &lemmas);
 
 };
