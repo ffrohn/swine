@@ -7,9 +7,10 @@
 #include <boost/algorithm/string.hpp>
 #include <assert.h>
 
-Swine::Swine(const SmtSolver solver):
+Swine::Swine(const SmtSolver solver, const SolverKind solver_kind):
     AbsSmtSolver(solver->get_solver_enum()),
     solver(solver),
+    solver_kind(solver_kind),
     int_sort(solver->make_sort(SortKind::INT)),
     exp(solver->make_symbol("exp", solver->make_sort(SortKind::FUNCTION, {int_sort, int_sort, int_sort}))),
     flattener(solver, exp) {
@@ -74,7 +75,9 @@ void Swine::add_initial_lemmas(const Term e) {
 }
 
 void Swine::assert_formula(const Term & t) {
+    if (log) std::cout << "flattening " << t << std::endl;
     const auto flat {flattener.flatten(t)};
+    if (log) std::cout << "got " << flat << std::endl;
     solver->assert_formula(t);
     const auto exps {flattener.clear_exps()};
     if (!exps.empty()) {
@@ -86,8 +89,16 @@ void Swine::assert_formula(const Term & t) {
     }
 }
 
+cpp_int to_cpp_int(const std::string &s) {
+    if (s.starts_with("(- ")) {
+        return -to_cpp_int(s.substr(3, s.size() - 4));
+    } else {
+        return cpp_int(s);
+    }
+}
+
 cpp_int value(const Term term) {
-    return cpp_int(term->to_string());
+    return to_cpp_int(term->to_string());
 }
 
 Term Swine::term(const cpp_int &value) {
@@ -96,7 +107,7 @@ Term Swine::term(const cpp_int &value) {
 
 long to_int(const std::string &s) {
     if (s.starts_with("(- ")) {
-        return -to_int(s.substr(3, s.size() - 1));
+        return -to_int(s.substr(3, s.size() - 4));
     } else {
         return stol(s);
     }
@@ -520,7 +531,11 @@ Term Swine::make_term(Op op, const Term & t) const {
 
 Term Swine::make_term(Op op, const Term & t0, const Term & t1) const {
     if (op == Op(Exp)) {
-        return solver->make_term(Op(Apply), exp, t0, t1);
+        if (t1->is_value()) {
+            return solver->make_term(Op(Pow), t0, t1);
+        } else {
+            return solver->make_term(Op(Apply), exp, t0, t1);
+        }
     } else {
         return solver->make_term(op, t0, t1);
     }
@@ -530,13 +545,26 @@ Term Swine::make_term(Op op,
                       const Term & t0,
                       const Term & t1,
                       const Term & t2) const {
-    return solver->make_term(op, t0, t1, t2);
+    if (op == Op(Mult) && solver_kind == SolverKind::Z3) {
+        return make_term(Op(Mult), {t0, t1, t2});
+    } else {
+        return solver->make_term(op, t0, t1, t2);
+    }
 }
 
 Term Swine::make_term(Op op, const TermVec & terms) const {
     if (op == Op(Exp)) {
         assert(terms.size() == 2);
-        return solver->make_term(Op(Apply), exp, terms[0], terms[1]);
+        return make_term(op, terms[0], terms[1]);
+    } else if (op == Op(Mult) && solver_kind == SolverKind::Z3 && terms[0]->get_sort() == int_sort) {
+        // for some reason, n-ary integer multiplication doesn't work with Z3
+        // fall back to binary multiplication
+        auto it {terms.begin()};
+        auto res {*it};
+        while (++it != terms.end()) {
+            res = solver->make_term(op, res, *it);
+        }
+        return res;
     } else {
         return solver->make_term(op, terms);
     }
@@ -574,16 +602,20 @@ int main(int argc, char *argv[]) {
         }
     };
     SmtSolver solver;
+    SolverKind solver_kind;
     std::optional<std::string> input;
     while (++arg < argc) {
         if (boost::iequals(argv[arg], "--solver")) {
             const std::string solver_str {get_next()};
             if (boost::iequals(solver_str, "z3")) {
                 solver = smt::Z3SolverFactory::create(false);
+                solver_kind = SolverKind::Z3;
             } else if (boost::iequals(solver_str, "cvc5")) {
                 solver = smt::Cvc5SolverFactory::create(false);
+                solver_kind = SolverKind::CVC5;
                 //            } else if (boost::iequals(solver_str, "yices")) {
                 //                solver = smt::Yices2SolverFactory::create(false);
+                //                solver_kind = SolverKind::Yices;
             } else {
                 throw std::invalid_argument("unknown solver " + solver_str);
             }
@@ -597,6 +629,6 @@ int main(int argc, char *argv[]) {
     if (!input) {
         throw std::invalid_argument("missing input file");
     }
-    SmtSolver swine = std::make_shared<Swine>(solver);
+    SmtSolver swine = std::make_shared<Swine>(solver, solver_kind);
     return SmtLibReader(swine).parse(*input);
 }

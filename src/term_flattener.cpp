@@ -13,6 +13,7 @@ Term TermFlattener::next_var(const Term term, UnorderedTermMap &map) {
             const auto res {solver->make_symbol("swine_flat_" + std::to_string(count), term->get_sort())};
             ++count;
             map.emplace(res, term);
+            return res;
         } catch (const IncorrectUsageException &e) {
             ++count;
         }

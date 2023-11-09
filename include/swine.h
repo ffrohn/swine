@@ -8,6 +8,10 @@
 using namespace smt;
 using namespace boost::multiprecision;
 
+enum SolverKind {
+    Z3, CVC5, Yices
+};
+
 class Swine: public AbsSmtSolver {
 
     struct Frame {
@@ -26,6 +30,7 @@ class Swine: public AbsSmtSolver {
     };
 
     SmtSolver solver;
+    SolverKind solver_kind;
     Sort int_sort;
     Term exp;
     TermFlattener flattener;
@@ -35,7 +40,7 @@ class Swine: public AbsSmtSolver {
 
 public:
 
-    Swine(const SmtSolver solver);
+    Swine(const SmtSolver solver, const SolverKind solver_kind);
     Swine(const Swine &) = delete;
     Swine & operator=(const Swine &) = delete;
     ~Swine(){};
