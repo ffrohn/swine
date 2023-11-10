@@ -12,14 +12,22 @@ enum SolverKind {
     Z3, CVC5, Yices
 };
 
+enum LemmaKind {
+    Initial, Tangent, Secant, Monotonicity
+};
+
+std::ostream& operator<<(std::ostream &s, const LemmaKind kind);
+
 class Swine: public AbsSmtSolver {
+
+private:
 
     struct Frame {
         UnorderedTermSet exps;
         UnorderedTermSet symbols;
-        std::vector<Term> assertions;
-        std::vector<Term> flat_assertions;
-        std::vector<Term> lemmas;
+        TermVec assertions;
+        TermVec flat_assertions;
+        std::unordered_map<Term, LemmaKind> lemmas;
     };
 
     struct EvaluatedExp {
@@ -32,8 +40,21 @@ class Swine: public AbsSmtSolver {
         long exponent_val;
     };
 
+    struct Statistics {
+        uint iterations {0};
+        uint initial_lemmas {0};
+        uint tangent_lemmas {0};
+        uint secant_lemmas {0};
+        uint monotonicity_lemmas {0};
+        uint num_assertions {0};
+        bool non_constant_base {false};
+    };
+
+    friend std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats);
+
     SmtSolver solver;
     SolverKind solver_kind;
+    Statistics stats;
     Sort int_sort;
     Term exp;
     TermFlattener flattener;
@@ -44,6 +65,7 @@ public:
 
     static bool validate;
     static bool log;
+    static bool statistics;
 
     Swine(const SmtSolver solver, const SolverKind solver_kind);
     Swine(const Swine &) = delete;
@@ -122,16 +144,18 @@ public:
     Term term(const cpp_int &value);
     std::optional<EvaluatedExp> evaluate_exponential(const Term exp_expression) const;
     Term tangent_lemma(const EvaluatedExp &e, const bool next);
-    void tangent_lemmas(const EvaluatedExp &e, TermVec &lemmas);
+    void tangent_lemmas(const EvaluatedExp &e, std::unordered_map<Term, LemmaKind> &lemmas);
     Term secant_lemma(const EvaluatedExp &e, const long other_exponent_val);
-    void secant_lemmas(const EvaluatedExp &e, TermVec &lemmas);
+    void secant_lemmas(const EvaluatedExp &e, std::unordered_map<Term, LemmaKind> &lemmas);
     TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
     std::optional<Term> monotonicity_lemma(const EvaluatedExp &e1, const EvaluatedExp &e2);
-    void monotonicity_lemmas(TermVec &lemmas);
+    void monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     cpp_int evaluate_int(Term expression) const;
     bool evaluate_bool(Term expression) const;
     void verify() const;
     void brute_force() const;
-    void add_lemma(const Term lemma);
+    void add_lemma(const Term lemma, const LemmaKind kind);
 
 };
+
+std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats);
