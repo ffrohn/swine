@@ -35,14 +35,15 @@ class Swine: public AbsSmtSolver {
     Term exp;
     TermFlattener flattener;
     std::vector<Frame> frames;
-    static const bool log {false};
     std::unordered_map<Term, std::vector<long>> secant_points;
     std::vector<std::vector<Term>> assertions;
-    bool validate;
 
 public:
 
-    Swine(const SmtSolver solver, const SolverKind solver_kind, const bool validate);
+    static bool validate;
+    static bool log;
+
+    Swine(const SmtSolver solver, const SolverKind solver_kind);
     Swine(const Swine &) = delete;
     Swine & operator=(const Swine &) = delete;
     ~Swine(){};

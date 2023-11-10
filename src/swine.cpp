@@ -7,14 +7,16 @@
 #include <boost/algorithm/string.hpp>
 #include <assert.h>
 
-Swine::Swine(const SmtSolver solver, const SolverKind solver_kind, const bool validate):
+bool Swine::validate {false};
+bool Swine::log {false};
+
+Swine::Swine(const SmtSolver solver, const SolverKind solver_kind):
     AbsSmtSolver(solver->get_solver_enum()),
     solver(solver),
     solver_kind(solver_kind),
     int_sort(solver->make_sort(SortKind::INT)),
     exp(solver->make_symbol("exp", solver->make_sort(SortKind::FUNCTION, {int_sort, int_sort, int_sort}))),
-    flattener(solver, exp),
-    validate(validate) {
+    flattener(solver, exp) {
     solver->set_opt("produce-models", "true");
     frames.emplace_back();
     assertions.emplace_back();
@@ -83,7 +85,7 @@ void Swine::assert_formula(const Term & t) {
     if (log) std::cout << "flattening " << t << std::endl;
     const auto flat {flattener.flatten(t)};
     if (log) std::cout << "got " << flat << std::endl;
-    solver->assert_formula(t);
+    solver->assert_formula(flat);
     const auto exps {flattener.clear_exps()};
     if (!exps.empty()) {
         auto &frame {frames.emplace_back()};
@@ -336,6 +338,12 @@ Result Swine::check_sat() {
             for (const auto &f: frames) {
                 for (const auto &e: f.exps) {
                     const auto ee {evaluate_exponential(e)};
+                    if (log) {
+                        std::cout << "trying to lift model for " << e << std::endl;
+                        std::cout << "base: " << ee->base_val << std::endl;
+                        std::cout << "exponent: " << ee->exponent_val << std::endl;
+                        std::cout << "e: " << ee->exp_expression_val << std::endl;
+                    }
                     // if the exponent is negative, integer exponentiation is undefined
                     // in smtlib, this means that the result can be arbitrary
                     if (ee && ee->exponent_val >= 0) {
@@ -751,7 +759,6 @@ int main(int argc, char *argv[]) {
     };
     SmtSolver solver;
     SolverKind solver_kind {SolverKind::Z3};
-    bool validate {false};
     std::optional<std::string> input;
     while (++arg < argc) {
         if (boost::iequals(argv[arg], "--solver")) {
@@ -769,7 +776,9 @@ int main(int argc, char *argv[]) {
                 throw std::invalid_argument("unknown solver " + solver_str);
             }
         } else if (boost::iequals(argv[arg], "--validate")) {
-            validate = true;
+            Swine::validate = true;
+        } else if (boost::iequals(argv[arg], "--log")) {
+            Swine::log = true;
         } else {
             input = argv[arg];
         }
@@ -780,6 +789,6 @@ int main(int argc, char *argv[]) {
     if (!input) {
         throw std::invalid_argument("missing input file");
     }
-    SmtSolver swine = std::make_shared<Swine>(solver, solver_kind, validate);
+    SmtSolver swine = std::make_shared<Swine>(solver, solver_kind);
     return SmtLibReader(swine).parse(*input);
 }
