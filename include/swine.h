@@ -17,6 +17,9 @@ class Swine: public AbsSmtSolver {
     struct Frame {
         UnorderedTermSet exps;
         UnorderedTermSet symbols;
+        std::vector<Term> assertions;
+        std::vector<Term> flat_assertions;
+        std::vector<Term> lemmas;
     };
 
     struct EvaluatedExp {
@@ -36,7 +39,6 @@ class Swine: public AbsSmtSolver {
     TermFlattener flattener;
     std::vector<Frame> frames;
     std::unordered_map<Term, std::vector<long>> secant_points;
-    std::vector<std::vector<Term>> assertions;
 
 public:
 
@@ -129,5 +131,7 @@ public:
     cpp_int evaluate_int(Term expression) const;
     bool evaluate_bool(Term expression) const;
     void verify() const;
+    void brute_force() const;
+    void add_lemma(const Term lemma);
 
 };

@@ -1,8 +1,10 @@
 #include "swine.h"
 
+#include "brute_force.h"
+
 #include <smt-switch/smtlib_reader.h>
-#include "smt-switch/cvc5_factory.h"
-#include "smt-switch/z3_factory.h"
+#include <smt-switch/cvc5_factory.h>
+#include <smt-switch/z3_factory.h>
 //#include "smt-switch/yices2_factory.h"
 #include <boost/algorithm/string.hpp>
 #include <assert.h>
@@ -19,7 +21,6 @@ Swine::Swine(const SmtSolver solver, const SolverKind solver_kind):
     flattener(solver, exp) {
     solver->set_opt("produce-models", "true");
     frames.emplace_back();
-    assertions.emplace_back();
 }
 
 void Swine::set_opt(const std::string option, const std::string value) {
@@ -28,6 +29,11 @@ void Swine::set_opt(const std::string option, const std::string value) {
 
 void Swine::set_logic(const std::string logic) {
     solver->set_logic(logic);
+}
+
+void Swine::add_lemma(const Term t) {
+    solver->assert_formula(t);
+    if (validate) frames.back().lemmas.push_back(t);
 }
 
 void Swine::add_initial_lemmas(const Term e) {
@@ -45,7 +51,7 @@ void Swine::add_initial_lemmas(const Term e) {
                 make_term(Op(Equal), exp, term(0)),
                 make_term(Op(Equal), e, term(1)));
     if (log) std::cout << lemma << std::endl;
-    solver->assert_formula(lemma);
+    add_lemma(lemma);
     // exp > 0 && base = 0 ==> base^exp = 0
     lemma = make_term(
                 Op(Implies),
@@ -55,7 +61,7 @@ void Swine::add_initial_lemmas(const Term e) {
                     make_term(Op(Equal), base, term(0))),
                 make_term(Op(Equal), e, term(0)));
     if (log) std::cout << lemma << std::endl;
-    solver->assert_formula(lemma);
+    add_lemma(lemma);
     // exp > 0 && base = 1 ==> base^exp = 1
     lemma = make_term(
                 Op(Implies),
@@ -65,7 +71,7 @@ void Swine::add_initial_lemmas(const Term e) {
                     make_term(Op(Equal), base, term(1))),
                 make_term(Op(Equal), e, term(1)));
     if (log) std::cout << lemma << std::endl;
-    solver->assert_formula(lemma);
+    add_lemma(lemma);
     // exp > 0 && base > 1 ==> base^exp > exp
     lemma = make_term(
                 Op(Implies),
@@ -75,21 +81,26 @@ void Swine::add_initial_lemmas(const Term e) {
                     make_term(Op(Gt), base, term(1))),
                 make_term(Op(Gt), e, exp));
     if (log) std::cout << lemma << std::endl;
-    solver->assert_formula(lemma);
+    add_lemma(lemma);
 }
 
 void Swine::assert_formula(const Term & t) {
-    if (validate) {
-        assertions.back().push_back(t);
-    }
-    if (log) std::cout << "flattening " << t << std::endl;
     const auto flat {flattener.flatten(t)};
-    if (log) std::cout << "got " << flat << std::endl;
+    if (log && flat != t) {
+        std::cout << "flattening" << std::endl;
+        std::cout << "original term:" << std::endl;
+        std::cout << t << std::endl;
+        std::cout << "new term" << std::endl;
+        std::cout << flat << std::endl;
+    }
+    if (validate) {
+        frames.back().assertions.push_back(t);
+        frames.back().flat_assertions.push_back(flat);
+    }
     solver->assert_formula(flat);
     const auto exps {flattener.clear_exps()};
     if (!exps.empty()) {
-        auto &frame {frames.emplace_back()};
-        frame.exps.insert(exps.begin(), exps.end());
+        frames.back().exps.insert(exps.begin(), exps.end());
         for (const auto &e: exps) {
             add_initial_lemmas(e);
         }
@@ -322,6 +333,9 @@ Result Swine::check_sat() {
     while (true) {
         const auto res {solver->check_sat()};
         if (res.is_unsat()) {
+            if (validate) {
+                brute_force();
+            }
             return res;
         } else if (res.is_unknown()) {
             return res;
@@ -367,7 +381,7 @@ Result Swine::check_sat() {
             }
             monotonicity_lemmas(lemmas);
             for (const auto &l: lemmas) {
-                solver->assert_formula(l);
+                add_lemma(l);
             }
         }
     }
@@ -389,9 +403,6 @@ void Swine::push(uint64_t num) {
     solver->push(num);
     for (unsigned i = 0; i < num; ++i) {
         frames.emplace_back();
-        if (validate) {
-            assertions.emplace_back();
-        }
     }
 }
 
@@ -399,9 +410,6 @@ void Swine::pop(uint64_t num) {
     solver->pop(num);
     for (unsigned i = 0; i < num; ++i) {
         frames.pop_back();
-        if (validate) {
-            assertions.pop_back();
-        }
     }
 }
 
@@ -600,16 +608,12 @@ void Swine::reset() {
     solver->reset();
     frames = {};
     frames.emplace_back();
-    assertions = {};
-    assertions.emplace_back();
 }
 
 void Swine::reset_assertions() {
     solver->reset_assertions();
     frames = {};
     frames.emplace_back();
-    assertions = {};
-    assertions.emplace_back();
 }
 
 Term Swine::substitute(const Term term,
@@ -629,6 +633,11 @@ cpp_int Swine::evaluate_int(Term expression) const {
     } else if (expression->get_op() == Op(Apply) && *expression->begin() == exp) {
         auto it {expression->begin()};
         const auto fst {evaluate_int(*(++it))};
+        const auto snd {stol(evaluate_int(*(++it)).str())};
+        return pow(fst, snd);
+    } else if (expression->get_op() == Op(Pow)) {
+        auto it {expression->begin()};
+        const auto fst {evaluate_int(*it)};
         const auto snd {stol(evaluate_int(*(++it)).str())};
         return pow(fst, snd);
     } else if (expression->get_op() == Op(Negate)) {
@@ -732,8 +741,8 @@ bool Swine::evaluate_bool(Term expression) const {
 }
 
 void Swine::verify() const {
-    for (const auto &as: assertions) {
-        for (const auto &a: as) {
+    for (const auto &f: frames) {
+        for (const auto &a: f.assertions) {
             if (!evaluate_bool(a)) {
                 std::cout << "Validation of the following assertion failed:" << std::endl;
                 std::cout << a << std::endl;
@@ -741,9 +750,46 @@ void Swine::verify() const {
                 for (const auto &[key, value]: get_model()) {
                     std::cout << key << " = " << value << std::endl;
                 }
+                for (const auto &f: frames) {
+                    for (const auto &e: f.exps) {
+                        const auto ee {evaluate_exponential(e)};
+                        if (ee) {
+                            std::cout << ee->exp_expression << ":" << std::endl;
+                            std::cout << ee->base_val << "^" << ee->exponent_val << " = " << ee->exp_expression_val << std::endl;
+                        }
+                    }
+                }
                 return;
             }
         }
+    }
+}
+
+void Swine::brute_force() const {
+    TermVec assertions;
+    for (const auto &f: frames) {
+        for (const auto &a: f.flat_assertions) {
+            assertions.push_back(a);
+        }
+    }
+    TermVec exps;
+    for (const auto &f: frames) {
+        for (const auto &e: f.exps) {
+            exps.push_back(e);
+        }
+    }
+    BruteForce bf(solver, assertions, exps);
+    if (bf.check_sat()) {
+        std::cout << "sat via brute force" << std::endl;
+        for (const auto &f: frames) {
+            for (const auto &l: f.lemmas) {
+                if (!boost::iequals(solver->get_value(l)->to_string(), "true")) {
+                    std::cout << "violated lemma" << std::endl;
+                    std::cout << l << std::endl;
+                }
+            }
+        }
+        verify();
     }
 }
 

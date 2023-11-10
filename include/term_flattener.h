@@ -10,11 +10,15 @@ class TermFlattener {
 
     const Term exp;
 
+    UnorderedTermMap replacement_map;
+
     UnorderedTermSet exps;
 
-    Term next_var(Term term, UnorderedTermMap &map);
+    UnorderedTermMap map;
 
-    Term flatten(Term term, UnorderedTermMap &map);
+    Term replacement_var(Term term);
+
+    Term flatten(Term term, UnorderedTermSet &set);
 
 public:
 
