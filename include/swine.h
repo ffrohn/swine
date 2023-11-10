@@ -35,12 +35,14 @@ class Swine: public AbsSmtSolver {
     Term exp;
     TermFlattener flattener;
     std::vector<Frame> frames;
-    static const bool log {true};
+    static const bool log {false};
     std::unordered_map<Term, std::vector<long>> secant_points;
+    std::vector<std::vector<Term>> assertions;
+    bool validate;
 
 public:
 
-    Swine(const SmtSolver solver, const SolverKind solver_kind);
+    Swine(const SmtSolver solver, const SolverKind solver_kind, const bool validate);
     Swine(const Swine &) = delete;
     Swine & operator=(const Swine &) = delete;
     ~Swine(){};
@@ -115,7 +117,7 @@ public:
 
     void add_initial_lemmas(const Term e);
     Term term(const cpp_int &value);
-    std::optional<EvaluatedExp> evaluate(const Term exp_expression) const;
+    std::optional<EvaluatedExp> evaluate_exponential(const Term exp_expression) const;
     Term tangent_lemma(const EvaluatedExp &e, const bool next);
     void tangent_lemmas(const EvaluatedExp &e, TermVec &lemmas);
     Term secant_lemma(const EvaluatedExp &e, const long other_exponent_val);
@@ -123,5 +125,8 @@ public:
     TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
     std::optional<Term> monotonicity_lemma(const EvaluatedExp &e1, const EvaluatedExp &e2);
     void monotonicity_lemmas(TermVec &lemmas);
+    cpp_int evaluate_int(Term expression) const;
+    bool evaluate_bool(Term expression) const;
+    void verify() const;
 
 };

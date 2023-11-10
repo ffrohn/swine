@@ -7,15 +7,17 @@
 #include <boost/algorithm/string.hpp>
 #include <assert.h>
 
-Swine::Swine(const SmtSolver solver, const SolverKind solver_kind):
+Swine::Swine(const SmtSolver solver, const SolverKind solver_kind, const bool validate):
     AbsSmtSolver(solver->get_solver_enum()),
     solver(solver),
     solver_kind(solver_kind),
     int_sort(solver->make_sort(SortKind::INT)),
     exp(solver->make_symbol("exp", solver->make_sort(SortKind::FUNCTION, {int_sort, int_sort, int_sort}))),
-    flattener(solver, exp) {
+    flattener(solver, exp),
+    validate(validate) {
     solver->set_opt("produce-models", "true");
     frames.emplace_back();
+    assertions.emplace_back();
 }
 
 void Swine::set_opt(const std::string option, const std::string value) {
@@ -75,6 +77,9 @@ void Swine::add_initial_lemmas(const Term e) {
 }
 
 void Swine::assert_formula(const Term & t) {
+    if (validate) {
+        assertions.back().push_back(t);
+    }
     if (log) std::cout << "flattening " << t << std::endl;
     const auto flat {flattener.flatten(t)};
     if (log) std::cout << "got " << flat << std::endl;
@@ -113,7 +118,11 @@ long to_int(const std::string &s) {
     }
 }
 
-std::optional<Swine::EvaluatedExp> Swine::evaluate(const Term exp_expression) const {
+long to_int(const Term &t) {
+    return to_int(t->to_string());
+}
+
+std::optional<Swine::EvaluatedExp> Swine::evaluate_exponential(const Term exp_expression) const {
     EvaluatedExp res;
     res.exp_expression = exp_expression;
     res.exp_expression_val = value(get_value(exp_expression));
@@ -123,7 +132,7 @@ std::optional<Swine::EvaluatedExp> Swine::evaluate(const Term exp_expression) co
     res.base_val = value(get_value(*it));
     ++it;
     res.exponent = *it;
-    res.exponent_val = to_int(get_value(*it)->to_string());
+    res.exponent_val = to_int(get_value(*it));
     if (res.exponent_val < 0) {
         return {};
     }
@@ -289,11 +298,11 @@ void Swine::monotonicity_lemmas(TermVec &lemmas) {
     // search for pairs exp(b,e1), exp(b,e2) whose models violate monotonicity of exp
     for (auto it1 = frames.begin(); it1 != frames.end(); ++it1) {
         for (const auto &exp1: it1->exps) {
-            const auto e1 {evaluate(exp1)};
+            const auto e1 {evaluate_exponential(exp1)};
             if (e1 && e1->base_val > 1) {
                 for (auto it2 = it1; ++it2 != frames.end();) {
                     for (const auto &exp2: it2->exps) {
-                        const auto e2 {evaluate(exp2)};
+                        const auto e2 {evaluate_exponential(exp2)};
                         if (e2 && e2->base_val > 1) {
                             const auto mon_lemma {monotonicity_lemma(*e1, *e2)};
                             if (mon_lemma) {
@@ -326,7 +335,7 @@ Result Swine::check_sat() {
             // check if the model can be lifted, add refinement lemmas otherwise
             for (const auto &f: frames) {
                 for (const auto &e: f.exps) {
-                    const auto ee {evaluate(e)};
+                    const auto ee {evaluate_exponential(e)};
                     // if the exponent is negative, integer exponentiation is undefined
                     // in smtlib, this means that the result can be arbitrary
                     if (ee && ee->exponent_val >= 0) {
@@ -343,6 +352,9 @@ Result Swine::check_sat() {
                 }
             }
             if (sat) {
+                if (validate) {
+                    verify();
+                }
                 return res;
             }
             monotonicity_lemmas(lemmas);
@@ -369,6 +381,9 @@ void Swine::push(uint64_t num) {
     solver->push(num);
     for (unsigned i = 0; i < num; ++i) {
         frames.emplace_back();
+        if (validate) {
+            assertions.emplace_back();
+        }
     }
 }
 
@@ -376,6 +391,9 @@ void Swine::pop(uint64_t num) {
     solver->pop(num);
     for (unsigned i = 0; i < num; ++i) {
         frames.pop_back();
+        if (validate) {
+            assertions.pop_back();
+        }
     }
 }
 
@@ -531,7 +549,7 @@ Term Swine::make_term(Op op, const Term & t) const {
 
 Term Swine::make_term(Op op, const Term & t0, const Term & t1) const {
     if (op == Op(Exp)) {
-        if (t1->is_value()) {
+        if (t1->is_value() && to_int(t1) >= 0) {
             return solver->make_term(Op(Pow), t0, t1);
         } else {
             return solver->make_term(Op(Apply), exp, t0, t1);
@@ -574,12 +592,16 @@ void Swine::reset() {
     solver->reset();
     frames = {};
     frames.emplace_back();
+    assertions = {};
+    assertions.emplace_back();
 }
 
 void Swine::reset_assertions() {
     solver->reset_assertions();
     frames = {};
     frames.emplace_back();
+    assertions = {};
+    assertions.emplace_back();
 }
 
 Term Swine::substitute(const Term term,
@@ -589,6 +611,132 @@ Term Swine::substitute(const Term term,
 
 void Swine::dump_smt2(std::string filename) const {
     solver->dump_smt2(filename);
+}
+
+cpp_int Swine::evaluate_int(Term expression) const {
+    if (expression->is_value()) {
+        return value(expression);
+    } else if (expression->is_symbol()) {
+        return evaluate_int(solver->get_value(expression));
+    } else if (expression->get_op() == Op(Apply) && *expression->begin() == exp) {
+        auto it {expression->begin()};
+        const auto fst {evaluate_int(*(++it))};
+        const auto snd {stol(evaluate_int(*(++it)).str())};
+        return pow(fst, snd);
+    } else if (expression->get_op() == Op(Negate)) {
+        return -evaluate_int(*expression->begin());
+    } else {
+        const auto eval = [&](const std::function<cpp_int(cpp_int&, cpp_int&)> &fun, const cpp_int neutral) {
+            auto cur {neutral};
+            for (auto it = expression->begin(); it != expression->end(); ++it) {
+                auto next {evaluate_int(*it)};
+                cur = fun(cur, next);
+            }
+            return cur;
+        };
+        if (expression->get_op() == Op(Plus)) {
+            return eval([&](auto &x, auto &y) {
+                return x + y;
+            }, 0);
+        } else if (expression->get_op() == Op(Mult)) {
+            return eval([&](auto &x, auto &y) {
+                return x * y;
+            }, 1);
+        } else if (expression->get_op() == Op(Minus)) {
+            return eval([&](auto &x, auto &y) {
+                return x - y;
+            }, 0);
+        } else {
+            std::cout << expression->get_op() << std::endl;
+            throw std::invalid_argument("failed to evaluate " + expression->to_string());
+        }
+    }
+}
+
+bool Swine::evaluate_bool(Term expression) const {
+    if (expression->is_value()) {
+        return boost::iequals(expression->to_string(), "true");
+    } else if (expression->is_symbol()) {
+        return evaluate_bool(solver->get_value(expression));
+    } else if (expression->get_op() == Op(And)) {
+        for (const auto e: expression) {
+            if (!evaluate_bool(e)) {
+                return false;
+            }
+        }
+        return true;
+    } else if (expression->get_op() == Op(Or)) {
+        for (const auto e: expression) {
+            if (evaluate_bool(e)) {
+                return true;
+            }
+        }
+        return false;
+    } else if (expression->get_op() == Op(Not)) {
+        return !evaluate_bool(*expression->begin());
+    } else if (expression->get_op() == Op(Equal) && (*expression->begin())->get_sort() != int_sort) {
+        auto it {expression->begin()};
+        const auto fst {evaluate_bool(*it)};
+        while (++it != expression->end()) {
+            if (evaluate_bool(*it) != fst) {
+                return false;
+            }
+        }
+        return true;
+    } else {
+        const auto test_comparison = [&](const std::function<bool(cpp_int, cpp_int)> &pred) {
+            auto it {expression->begin()};
+            auto cur {evaluate_int(*it)};
+            while (++it != expression->end()) {
+                const auto next {evaluate_int(*it)};
+                if (!pred(cur, next)) {
+                    return false;
+                } else {
+                    cur = next;
+                }
+            }
+            return true;
+        };
+        if (expression->get_op() == Op(Lt)) {
+            return test_comparison([](auto x, auto y) {
+                return x < y;
+            });
+        } else if (expression->get_op() == Op(Le)) {
+            return test_comparison([](auto x, auto y) {
+                return x <= y;
+            });
+        } else if (expression->get_op() == Op(Gt)) {
+            return test_comparison([](auto x, auto y) {
+                return x > y;
+            });
+        } else if (expression->get_op() == Op(Ge)) {
+            return test_comparison([](auto x, auto y) {
+                return x >= y;
+            });
+        } else if (expression->get_op() == Op(Equal)) {
+            return test_comparison([](auto x, auto y) {
+                return x == y;
+            });
+        } else {
+            throw std::invalid_argument("failed to evaluate " + expression->to_string());
+        }
+    }
+}
+
+void Swine::verify() const {
+    for (const auto &as: assertions) {
+        for (const auto &a: as) {
+            if (!evaluate_bool(a)) {
+                std::cout << "Validation of the following assertion failed:" << std::endl;
+                std::cout << a << std::endl;
+                std::cout << "model:" << std::endl;
+                for (const auto &[key, value]: get_model()) {
+                    std::cout << key << " = " << value << std::endl;
+                }
+                return;
+            }
+        }
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -602,7 +750,8 @@ int main(int argc, char *argv[]) {
         }
     };
     SmtSolver solver;
-    SolverKind solver_kind;
+    SolverKind solver_kind {SolverKind::Z3};
+    bool validate {false};
     std::optional<std::string> input;
     while (++arg < argc) {
         if (boost::iequals(argv[arg], "--solver")) {
@@ -619,6 +768,8 @@ int main(int argc, char *argv[]) {
             } else {
                 throw std::invalid_argument("unknown solver " + solver_str);
             }
+        } else if (boost::iequals(argv[arg], "--validate")) {
+            validate = true;
         } else {
             input = argv[arg];
         }
@@ -629,6 +780,6 @@ int main(int argc, char *argv[]) {
     if (!input) {
         throw std::invalid_argument("missing input file");
     }
-    SmtSolver swine = std::make_shared<Swine>(solver, solver_kind);
+    SmtSolver swine = std::make_shared<Swine>(solver, solver_kind, validate);
     return SmtLibReader(swine).parse(*input);
 }
