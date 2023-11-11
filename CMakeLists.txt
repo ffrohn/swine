@@ -37,6 +37,8 @@ target_sources(${EXECUTABLE} PRIVATE
     "${PROJECT_SOURCE_DIR}/src/term_flattener.cpp"
     "${PROJECT_SOURCE_DIR}/include/brute_force.h"
     "${PROJECT_SOURCE_DIR}/src/brute_force.cpp"
+    "${PROJECT_SOURCE_DIR}/include/util.h"
+    "${PROJECT_SOURCE_DIR}/src/util.cpp"
 )
 
 include_directories(${INCLUDE_DIRS})

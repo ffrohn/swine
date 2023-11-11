@@ -1,6 +1,6 @@
 #include "term_flattener.h"
 
-TermFlattener::TermFlattener(SmtSolver solver, const Term exp): solver(solver), exp(exp) {}
+TermFlattener::TermFlattener(SmtSolver solver, Util &util): solver(solver), util(util) {}
 
 bool is_fun_app(const Term term) {
     return !term->is_symbolic_const() && !term->is_param() && !term->is_symbol() && !term->is_value();
@@ -34,24 +34,23 @@ Term TermFlattener::flatten(Term term, UnorderedTermSet &set) {
     }
     if (term->get_op() == Op(Apply)) {
         auto it {term->begin()};
-        if (*it == exp) {
-            ++it;
+        if (*it == util.exp) {
             Term fst_arg;
-            if (is_fun_app(*it)) {
+            ++it;
+            if ((*it)->is_symbol() || (*it)->is_value()) {
+                fst_arg = *it;
+            } else {
                 set.insert(*it);
                 fst_arg = replacement_var(*it);
-            } else {
-                fst_arg = *it;
             }
-            ++it;
             Term snd_arg;
-            if (is_fun_app(*it)) {
+            if ((*(++it))->is_symbol()) {
+                snd_arg = *it;
+            } else {
                 set.insert(*it);
                 snd_arg = replacement_var(*it);
-            } else {
-                snd_arg = *it;
             }
-            const auto res {solver->make_term(Op(Apply), exp, fst_arg, snd_arg)};
+            const auto res {solver->make_term(Op(Apply), util.exp, fst_arg, snd_arg)};
             exps.insert(res);
             return res;
         }

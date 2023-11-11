@@ -55,8 +55,7 @@ private:
     SmtSolver solver;
     SolverKind solver_kind;
     Statistics stats;
-    Sort int_sort;
-    Term exp;
+    Util util;
     TermFlattener flattener;
     std::vector<Frame> frames;
     std::unordered_map<Term, std::vector<long>> secant_points;
@@ -141,7 +140,6 @@ public:
     void dump_smt2(std::string filename) const override;
 
     void add_initial_lemmas(const Term e);
-    Term term(const cpp_int &value);
     std::optional<EvaluatedExp> evaluate_exponential(const Term exp_expression) const;
     Term tangent_lemma(const EvaluatedExp &e, const bool next);
     void tangent_lemmas(const EvaluatedExp &e, std::unordered_map<Term, LemmaKind> &lemmas);

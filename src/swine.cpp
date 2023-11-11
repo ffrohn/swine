@@ -32,9 +32,8 @@ Swine::Swine(const SmtSolver solver, const SolverKind solver_kind):
     AbsSmtSolver(solver->get_solver_enum()),
     solver(solver),
     solver_kind(solver_kind),
-    int_sort(solver->make_sort(SortKind::INT)),
-    exp(solver->make_symbol("exp", solver->make_sort(SortKind::FUNCTION, {int_sort, int_sort, int_sort}))),
-    flattener(solver, exp) {
+    util(solver),
+    flattener(solver, util) {
     solver->set_opt("produce-models", "true");
     frames.emplace_back();
 }
@@ -72,15 +71,15 @@ void Swine::add_initial_lemmas(const Term e) {
     }
     ++it;
     const auto exp {*it};
-    const auto pos {make_term(Op(Gt), exp, term(0))};
+    const auto pos {make_term(Op(Gt), exp, util.term(0))};
     if (log) std::cout << "initial lemmas" << std::endl;
     Term lemma;
     // exp = 0 ==> base^exp = 1
     lemma =
         make_term(
             Op(Implies),
-            make_term(Op(Equal), exp, term(0)),
-            make_term(Op(Equal), e, term(1)));
+            make_term(Op(Equal), exp, util.term(0)),
+            make_term(Op(Equal), e, util.term(1)));
     if (log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
     // exp > 0 && base = 0 ==> base^exp = 0
@@ -90,8 +89,8 @@ void Swine::add_initial_lemmas(const Term e) {
             make_term(
                 Op(And),
                 pos,
-                make_term(Op(Equal), base, term(0))),
-            make_term(Op(Equal), e, term(0)));
+                make_term(Op(Equal), base, util.term(0))),
+            make_term(Op(Equal), e, util.term(0)));
     if (log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
     // exp > 0 && base = 1 ==> base^exp = 1
@@ -101,8 +100,8 @@ void Swine::add_initial_lemmas(const Term e) {
             make_term(
                 Op(And),
                 pos,
-                make_term(Op(Equal), base, term(1))),
-            make_term(Op(Equal), e, term(1)));
+                make_term(Op(Equal), base, util.term(1))),
+            make_term(Op(Equal), e, util.term(1)));
     if (log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
     // exp > 0 && base > 1 ==> base^exp > exp
@@ -112,7 +111,7 @@ void Swine::add_initial_lemmas(const Term e) {
             make_term(
                 Op(And),
                 pos,
-                make_term(Op(Gt), base, term(1))),
+                make_term(Op(Gt), base, util.term(1))),
             make_term(Op(Gt), e, exp));
     if (log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
@@ -142,22 +141,6 @@ void Swine::assert_formula(const Term & t) {
     }
 }
 
-cpp_int to_cpp_int(const std::string &s) {
-    if (s.starts_with("(- ")) {
-        return -to_cpp_int(s.substr(3, s.size() - 4));
-    } else {
-        return cpp_int(s);
-    }
-}
-
-cpp_int value(const Term term) {
-    return to_cpp_int(term->to_string());
-}
-
-Term Swine::term(const cpp_int &value) {
-    return solver->make_term(value.str(), int_sort);
-}
-
 long to_int(const std::string &s) {
     if (s.starts_with("(- ")) {
         return -to_int(s.substr(3, s.size() - 4));
@@ -173,11 +156,11 @@ long to_int(const Term &t) {
 std::optional<Swine::EvaluatedExp> Swine::evaluate_exponential(const Term exp_expression) const {
     EvaluatedExp res;
     res.exp_expression = exp_expression;
-    res.exp_expression_val = value(get_value(exp_expression));
+    res.exp_expression_val = util.value(get_value(exp_expression));
     auto it {exp_expression->begin()};
     ++it;
     res.base = *it;
-    res.base_val = value(get_value(*it));
+    res.base_val = util.value(get_value(*it));
     ++it;
     res.exponent = *it;
     res.exponent_val = to_int(get_value(*it));
@@ -196,14 +179,14 @@ Term Swine::tangent_lemma(const EvaluatedExp &e, const bool next) {
             : std::pair(e.exponent_val - 1, other_val);
     const auto tangent {make_term(
         Op(Plus),
-        term(fst_val),
+        util.term(fst_val),
         make_term(
             Op(Mult),
-            term(diff),
-            make_term(Op(Minus), e.exponent, term(fst_exponent))))};
+            util.term(diff),
+            make_term(Op(Minus), e.exponent, util.term(fst_exponent))))};
     const auto tangent_lemma {make_term(
         Op(Implies),
-        make_term(Op(Ge), e.exponent, term(0)),
+        make_term(Op(Ge), e.exponent, util.term(0)),
         make_term(Op(Ge), e.exp_expression, tangent))};
     if (log) std::cout << tangent_lemma << std::endl;
     return tangent_lemma;
@@ -226,29 +209,29 @@ Term Swine::secant_lemma(const EvaluatedExp &e, const long other_exponent_val) {
         Op(Plus),
         make_term(
             Op(Mult),
-            term(other_val - e.expected_val),
-            make_term(Op(Minus), e.exponent, term(other_exponent_val))),
-        term(other_val * factor))};
+            util.term(other_val - e.expected_val),
+            make_term(Op(Minus), e.exponent, util.term(other_exponent_val))),
+        util.term(other_val * factor))};
     Term premise;
     if (other_exponent_val <= e.exponent_val) {
         premise =
             make_term(
                 Op(And),
-                make_term(Op(Ge), e.exponent, term(other_exponent_val)),
-                make_term(Op(Le), e.exponent, term(e.exponent_val)));
+                make_term(Op(Ge), e.exponent, util.term(other_exponent_val)),
+                make_term(Op(Le), e.exponent, util.term(e.exponent_val)));
     } else {
         premise =
             make_term(
                 Op(And),
-                make_term(Op(Le), e.exponent, term(other_exponent_val)),
-                make_term(Op(Ge), e.exponent, term(e.exponent_val)));
+                make_term(Op(Le), e.exponent, util.term(other_exponent_val)),
+                make_term(Op(Ge), e.exponent, util.term(e.exponent_val)));
     }
     const auto res {make_term(
         Op(Implies),
         premise,
         make_term(
             Op(Le),
-            make_term(Op(Mult), term(factor), e.exp_expression),
+            make_term(Op(Mult), util.term(factor), e.exp_expression),
             secant))};
     if (log) std::cout << res << std::endl;
     return res;
@@ -331,7 +314,7 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExp &e1, const Eval
             Op(And),
             make_term(
                 Op(Le),
-                term(0),
+                util.term(0),
                 smaller.exponent),
             premise),
         make_term(Op(Lt), smaller.exp_expression, greater.exp_expression))};
@@ -605,43 +588,55 @@ Term Swine::make_term(Op op, const Term & t) const {
 }
 
 Term Swine::make_term(Op op, const Term & t0, const Term & t1) const {
-    if (op == Op(Exp)) {
-        if (t1->is_value() && to_int(t1) >= 0) {
-            return solver->make_term(Op(Pow), t0, t1);
-        } else {
-            return solver->make_term(Op(Apply), exp, t0, t1);
-        }
-    } else {
-        return solver->make_term(op, t0, t1);
-    }
+    return make_term(op, {t0, t1});
 }
 
 Term Swine::make_term(Op op,
                       const Term & t0,
                       const Term & t1,
                       const Term & t2) const {
-    if (op == Op(Mult) && solver_kind == SolverKind::Z3) {
-        return make_term(Op(Mult), {t0, t1, t2});
-    } else {
-        return solver->make_term(op, t0, t1, t2);
-    }
+    return make_term(op, {t0, t1, t2});
 }
 
 Term Swine::make_term(Op op, const TermVec & terms) const {
-    if (op == Op(Exp)) {
-        assert(terms.size() == 2);
-        return make_term(op, terms[0], terms[1]);
-    } else if (op == Op(Mult) && solver_kind == SolverKind::Z3 && terms[0]->get_sort() == int_sort) {
-        // for some reason, n-ary integer multiplication doesn't work with Z3
-        // fall back to binary multiplication
-        auto it {terms.begin()};
-        auto res {*it};
-        while (++it != terms.end()) {
-            res = solver->make_term(op, res, *it);
+    const auto mk_term = [&](const TermVec &terms) {
+        if (op == Op(Mult) && solver_kind == SolverKind::Z3) {
+            auto it {terms.begin()};
+            auto res {*it};
+            while (++it != terms.end()) {
+                res = solver->make_term(op, res, *it);
+            }
+            return res;
+        } else {
+            return solver->make_term(op, terms);
         }
-        return res;
+    };
+    std::vector<std::optional<cpp_int>> ints;
+    TermVec ts;
+    bool ground {true};
+    for (const auto &t: terms) {
+        ints.push_back(t->get_sort() == util.int_sort ? util.evaluate_ground_int(t) : std::optional<cpp_int>());
+        ts.push_back(ints.back() ? util.term(*ints.back()) : t);
+        ground = ground && ints.back();
+    }
+    if (op == Op(Exp)) {
+        const auto snd_int {*(++ints.begin())};
+        if (snd_int && *snd_int < 0) {
+            return solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
+        }
+    }
+    if (ground) {
+        const auto t {mk_term(ts)};
+        return t->get_sort() == util.int_sort ? util.term(*util.evaluate_ground_int(t)) : t;
+    } else if (op == Op(Exp)) {
+        const auto snd_int {*(++ints.begin())};
+        if (snd_int) {
+            return solver->make_term(Op(Pow), ts);
+        } else {
+            return solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
+        }
     } else {
-        return solver->make_term(op, terms);
+        return mk_term(ts);
     }
 }
 
@@ -668,10 +663,10 @@ void Swine::dump_smt2(std::string filename) const {
 
 cpp_int Swine::evaluate_int(Term expression) const {
     if (expression->is_value()) {
-        return value(expression);
+        return util.value(expression);
     } else if (expression->is_symbol()) {
         return evaluate_int(solver->get_value(expression));
-    } else if (expression->get_op() == Op(Apply) && *expression->begin() == exp) {
+    } else if (expression->get_op() == Op(Apply) && *expression->begin() == util.exp) {
         auto it {expression->begin()};
         const auto fst {evaluate_int(*(++it))};
         const auto snd {stol(evaluate_int(*(++it)).str())};
@@ -732,7 +727,7 @@ bool Swine::evaluate_bool(Term expression) const {
         return false;
     } else if (expression->get_op() == Op(Not)) {
         return !evaluate_bool(*expression->begin());
-    } else if (expression->get_op() == Op(Equal) && (*expression->begin())->get_sort() != int_sort) {
+    } else if (expression->get_op() == Op(Equal) && (*expression->begin())->get_sort() != util.int_sort) {
         auto it {expression->begin()};
         const auto fst {evaluate_bool(*it)};
         while (++it != expression->end()) {
