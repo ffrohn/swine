@@ -30,24 +30,24 @@ bool Swine::statistics {false};
 
 Swine::Swine(const SmtSolver solver, const SolverKind solver_kind):
     AbsSmtSolver(solver->get_solver_enum()),
-    solver(solver),
     solver_kind(solver_kind),
     util(solver),
-    flattener(solver, util) {
+    flattener(util),
+    eval(util) {
     solver->set_opt("produce-models", "true");
     frames.emplace_back();
 }
 
 void Swine::set_opt(const std::string option, const std::string value) {
-    solver->set_opt(option, value);
+    util.solver->set_opt(option, value);
 }
 
 void Swine::set_logic(const std::string logic) {
-    solver->set_logic(logic);
+    util.solver->set_logic(logic);
 }
 
 void Swine::add_lemma(const Term t, const LemmaKind kind) {
-    solver->assert_formula(t);
+    util.solver->assert_formula(t);
     if (validate) frames.back().lemmas.emplace(t, kind);
     switch (kind) {
     case Tangent: ++stats.tangent_lemmas;
@@ -131,7 +131,7 @@ void Swine::assert_formula(const Term & t) {
         frames.back().assertions.push_back(t);
         frames.back().flat_assertions.push_back(flat);
     }
-    solver->assert_formula(flat);
+    util.solver->assert_formula(flat);
     const auto exps {flattener.clear_exps()};
     if (!exps.empty()) {
         frames.back().exps.insert(exps.begin(), exps.end());
@@ -153,8 +153,8 @@ long to_int(const Term &t) {
     return to_int(t->to_string());
 }
 
-std::optional<Swine::EvaluatedExp> Swine::evaluate_exponential(const Term exp_expression) const {
-    EvaluatedExp res;
+std::optional<Swine::EvaluatedExponential> Swine::evaluate_exponential(const Term exp_expression) const {
+    EvaluatedExponential res;
     res.exp_expression = exp_expression;
     res.exp_expression_val = util.value(get_value(exp_expression));
     auto it {exp_expression->begin()};
@@ -171,7 +171,7 @@ std::optional<Swine::EvaluatedExp> Swine::evaluate_exponential(const Term exp_ex
     return res;
 }
 
-Term Swine::tangent_lemma(const EvaluatedExp &e, const bool next) {
+Term Swine::tangent_lemma(const EvaluatedExponential &e, const bool next) {
     const auto other_val {pow(e.base_val, next ? e.exponent_val + 1 : e.exponent_val - 1)};
     const auto diff {abs(e.expected_val - other_val)};
     const auto [fst_exponent, fst_val] = next
@@ -192,7 +192,7 @@ Term Swine::tangent_lemma(const EvaluatedExp &e, const bool next) {
     return tangent_lemma;
 }
 
-void Swine::tangent_lemmas(const EvaluatedExp &e, std::unordered_map<Term, LemmaKind> &lemmas) {
+void Swine::tangent_lemmas(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas) {
     if (!e.base->is_value()) {
         return;
     }
@@ -202,7 +202,7 @@ void Swine::tangent_lemmas(const EvaluatedExp &e, std::unordered_map<Term, Lemma
     }
 }
 
-Term Swine::secant_lemma(const EvaluatedExp &e, const long other_exponent_val) {
+Term Swine::secant_lemma(const EvaluatedExponential &e, const long other_exponent_val) {
     const auto other_val {pow(e.base_val, other_exponent_val)};
     const auto factor {other_exponent_val - e.exponent_val};
     const auto secant {make_term(
@@ -237,7 +237,7 @@ Term Swine::secant_lemma(const EvaluatedExp &e, const long other_exponent_val) {
     return res;
 }
 
-void Swine::secant_lemmas(const EvaluatedExp &e, std::unordered_map<Term, LemmaKind> &lemmas) {
+void Swine::secant_lemmas(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas) {
     if (!e.base->is_value()) {
         return;
     }
@@ -268,7 +268,7 @@ void Swine::secant_lemmas(const EvaluatedExp &e, std::unordered_map<Term, LemmaK
     lemmas.emplace(secant_lemma(e, *next), Secant);
 }
 
-std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExp &e1, const EvaluatedExp &e2) {
+std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, const EvaluatedExponential &e2) {
     if ((e1.base_val > e2.base_val && e1.exponent_val < e2.exponent_val)
             || (e1.base_val < e2.base_val && e1.exponent_val > e2.exponent_val)
             || (e1.base_val == e2.base_val && e1.exponent_val == e2.exponent_val)) {
@@ -351,7 +351,7 @@ Result Swine::check_sat() {
     Result res;
     while (true) {
         ++stats.iterations;
-        res = solver->check_sat();
+        res = util.solver->check_sat();
         if (res.is_unsat()) {
             if (validate) {
                 brute_force();
@@ -412,37 +412,37 @@ Result Swine::check_sat() {
 }
 
 Result Swine::check_sat_assuming(const TermVec & assumptions) {
-    return solver->check_sat_assuming(assumptions);
+    return util.solver->check_sat_assuming(assumptions);
 }
 
 Result Swine::check_sat_assuming_list(const TermList & assumptions) {
-    return solver->check_sat_assuming_list(assumptions);
+    return util.solver->check_sat_assuming_list(assumptions);
 }
 
 Result Swine::check_sat_assuming_set(const UnorderedTermSet & assumptions) {
-    return solver->check_sat_assuming_set(assumptions);
+    return util.solver->check_sat_assuming_set(assumptions);
 }
 
 void Swine::push(uint64_t num) {
-    solver->push(num);
+    util.solver->push(num);
     for (unsigned i = 0; i < num; ++i) {
         frames.emplace_back();
     }
 }
 
 void Swine::pop(uint64_t num) {
-    solver->pop(num);
+    util.solver->pop(num);
     for (unsigned i = 0; i < num; ++i) {
         frames.pop_back();
     }
 }
 
 uint64_t Swine::get_context_level() const {
-    return solver->get_context_level();
+    return util.solver->get_context_level();
 }
 
 Term Swine::get_value(const Term & t) const {
-    return solver->get_value(t);
+    return util.solver->get_value(t);
 }
 
 UnorderedTermMap Swine::get_model() const {
@@ -464,127 +464,127 @@ UnorderedTermMap Swine::get_model() const {
 
 UnorderedTermMap Swine::get_array_values(const Term & arr,
                                          Term & out_const_base) const {
-    return solver->get_array_values(arr, out_const_base);
+    return util.solver->get_array_values(arr, out_const_base);
 }
 
 void Swine::get_unsat_assumptions(UnorderedTermSet & out) {
-    solver->get_unsat_assumptions(out);
+    util.solver->get_unsat_assumptions(out);
 }
 
 Sort Swine::make_sort(const std::string name, uint64_t arity) const {
-    return solver->make_sort(name, arity);
+    return util.solver->make_sort(name, arity);
 }
 
 Sort Swine::make_sort(SortKind sk) const {
-    return solver->make_sort(sk);
+    return util.solver->make_sort(sk);
 }
 
 Sort Swine::make_sort(SortKind sk, uint64_t size) const {
-    return solver->make_sort(sk, size);
+    return util.solver->make_sort(sk, size);
 }
 
 Sort Swine::make_sort(SortKind sk, const Sort & sort1) const {
-    return solver->make_sort(sk, sort1);
+    return util.solver->make_sort(sk, sort1);
 }
 
 Sort Swine::make_sort(SortKind sk,
                       const Sort & sort1,
                       const Sort & sort2) const {
-    return solver->make_sort(sk, sort1, sort2);
+    return util.solver->make_sort(sk, sort1, sort2);
 }
 
 Sort Swine::make_sort(SortKind sk,
                       const Sort & sort1,
                       const Sort & sort2,
                       const Sort & sort3) const {
-    return solver->make_sort(sk, sort1, sort2, sort3);
+    return util.solver->make_sort(sk, sort1, sort2, sort3);
 }
 
 Sort Swine::make_sort(SortKind sk, const SortVec & sorts) const {
-    return solver->make_sort(sk, sorts);
+    return util.solver->make_sort(sk, sorts);
 }
 
 Sort Swine::make_sort(const Sort & sort_con, const SortVec & sorts) const {
-    return solver->make_sort(sort_con, sorts);
+    return util.solver->make_sort(sort_con, sorts);
 }
 
 Sort Swine::make_sort(const DatatypeDecl & d) const {
-    return solver->make_sort(d);
+    return util.solver->make_sort(d);
 }
 
 DatatypeDecl Swine::make_datatype_decl(const std::string & s) {
-    return solver->make_datatype_decl(s);
+    return util.solver->make_datatype_decl(s);
 }
 
 DatatypeConstructorDecl Swine::make_datatype_constructor_decl(
         const std::string s) {
-    return solver->make_datatype_constructor_decl(s);
+    return util.solver->make_datatype_constructor_decl(s);
 }
 
 void Swine::add_constructor(DatatypeDecl & dt,
                             const DatatypeConstructorDecl & con) const {
-    solver->add_constructor(dt, con);
+    util.solver->add_constructor(dt, con);
 }
 
 void Swine::add_selector(DatatypeConstructorDecl & dt,
                          const std::string & name,
                          const Sort & s) const {
-    solver->add_selector(dt, name, s);
+    util.solver->add_selector(dt, name, s);
 }
 
 void Swine::add_selector_self(DatatypeConstructorDecl & dt,
                               const std::string & name) const {
-    solver->add_selector_self(dt, name);
+    util.solver->add_selector_self(dt, name);
 }
 
 Term Swine::get_constructor(const Sort & s, std::string name) const {
-    return solver->get_constructor(s, name);
+    return util.solver->get_constructor(s, name);
 }
 
 Term Swine::get_tester(const Sort & s, std::string name) const {
-    return solver->get_tester(s, name);
+    return util.solver->get_tester(s, name);
 }
 
 Term Swine::get_selector(const Sort & s,
                          std::string con,
                          std::string name) const {
-    return solver->get_selector(s, con, name);
+    return util.solver->get_selector(s, con, name);
 }
 
 Term Swine::make_term(bool b) const {
-    return solver->make_term(b);
+    return util.solver->make_term(b);
 }
 
 Term Swine::make_term(int64_t i, const Sort & sort) const {
-    return solver->make_term(i, sort);
+    return util.solver->make_term(i, sort);
 }
 
 Term Swine::make_term(const std::string val,
                       const Sort & sort,
                       uint64_t base) const {
-    return solver->make_term(val, sort, base);
+    return util.solver->make_term(val, sort, base);
 }
 
 Term Swine::make_term(const Term & val, const Sort & sort) const {
-    return solver->make_term(val, sort);
+    return util.solver->make_term(val, sort);
 }
 
 Term Swine::make_symbol(const std::string name, const Sort & sort) {
-    const auto res {solver->make_symbol(name, sort)};
+    const auto res {util.solver->make_symbol(name, sort)};
     frames.back().symbols.insert(res);
     return res;
 }
 
 Term Swine::get_symbol(const std::string & name) {
-    return solver->get_symbol(name);
+    return util.solver->get_symbol(name);
 }
 
 Term Swine::make_param(const std::string name, const Sort & sort) {
-    return solver->make_param(name, sort);
+    return util.solver->make_param(name, sort);
 }
 
 Term Swine::make_term(Op op, const Term & t) const {
-    return solver->make_term(op, t);
+    return util.solver->make_term(op, t);
 }
 
 Term Swine::make_term(Op op, const Term & t0, const Term & t1) const {
@@ -604,36 +604,36 @@ Term Swine::make_term(Op op, const TermVec & terms) const {
             auto it {terms.begin()};
             auto res {*it};
             while (++it != terms.end()) {
-                res = solver->make_term(op, res, *it);
+                res = util.solver->make_term(op, res, *it);
             }
             return res;
         } else {
-            return solver->make_term(op, terms);
+            return util.solver->make_term(op, terms);
         }
     };
     std::vector<std::optional<cpp_int>> ints;
     TermVec ts;
     bool ground {true};
     for (const auto &t: terms) {
-        ints.push_back(t->get_sort() == util.int_sort ? util.evaluate_ground_int(t) : std::optional<cpp_int>());
+        ints.push_back(t->get_sort() == util.int_sort ? eval.evaluate_ground_int(t) : std::optional<cpp_int>());
         ts.push_back(ints.back() ? util.term(*ints.back()) : t);
         ground = ground && ints.back();
     }
     if (op == Op(Exp)) {
         const auto snd_int {*(++ints.begin())};
         if (snd_int && *snd_int < 0) {
-            return solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
+            return util.solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
         }
     }
     if (ground) {
         const auto t {mk_term(ts)};
-        return t->get_sort() == util.int_sort ? util.term(*util.evaluate_ground_int(t)) : t;
+        return t->get_sort() == util.int_sort ? util.term(*eval.evaluate_ground_int(t)) : t;
     } else if (op == Op(Exp)) {
         const auto snd_int {*(++ints.begin())};
         if (snd_int) {
-            return solver->make_term(Op(Pow), ts);
+            return util.solver->make_term(Op(Pow), ts);
         } else {
-            return solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
+            return util.solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
         }
     } else {
         return mk_term(ts);
@@ -641,145 +641,30 @@ Term Swine::make_term(Op op, const TermVec & terms) const {
 }
 
 void Swine::reset() {
-    solver->reset();
+    util.solver->reset();
     frames = {};
     frames.emplace_back();
 }
 
 void Swine::reset_assertions() {
-    solver->reset_assertions();
+    util.solver->reset_assertions();
     frames = {};
     frames.emplace_back();
 }
 
 Term Swine::substitute(const Term term,
                        const UnorderedTermMap & substitution_map) const {
-    return solver->substitute(term, substitution_map);
+    return util.solver->substitute(term, substitution_map);
 }
 
 void Swine::dump_smt2(std::string filename) const {
-    solver->dump_smt2(filename);
-}
-
-cpp_int Swine::evaluate_int(Term expression) const {
-    if (expression->is_value()) {
-        return util.value(expression);
-    } else if (expression->is_symbol()) {
-        return evaluate_int(solver->get_value(expression));
-    } else if (expression->get_op() == Op(Apply) && *expression->begin() == util.exp) {
-        auto it {expression->begin()};
-        const auto fst {evaluate_int(*(++it))};
-        const auto snd {stol(evaluate_int(*(++it)).str())};
-        return pow(fst, snd);
-    } else if (expression->get_op() == Op(Pow)) {
-        auto it {expression->begin()};
-        const auto fst {evaluate_int(*it)};
-        const auto snd {stol(evaluate_int(*(++it)).str())};
-        return pow(fst, snd);
-    } else if (expression->get_op() == Op(Negate)) {
-        return -evaluate_int(*expression->begin());
-    } else {
-        const auto eval = [&](const std::function<cpp_int(cpp_int&, cpp_int&)> &fun, const cpp_int neutral) {
-            auto cur {neutral};
-            for (auto it = expression->begin(); it != expression->end(); ++it) {
-                auto next {evaluate_int(*it)};
-                cur = fun(cur, next);
-            }
-            return cur;
-        };
-        if (expression->get_op() == Op(Plus)) {
-            return eval([&](auto &x, auto &y) {
-                return x + y;
-            }, 0);
-        } else if (expression->get_op() == Op(Mult)) {
-            return eval([&](auto &x, auto &y) {
-                return x * y;
-            }, 1);
-        } else if (expression->get_op() == Op(Minus)) {
-            return eval([&](auto &x, auto &y) {
-                return x - y;
-            }, 0);
-        } else {
-            std::cout << expression->get_op() << std::endl;
-            throw std::invalid_argument("failed to evaluate " + expression->to_string());
-        }
-    }
-}
-
-bool Swine::evaluate_bool(Term expression) const {
-    if (expression->is_value()) {
-        return boost::iequals(expression->to_string(), "true");
-    } else if (expression->is_symbol()) {
-        return evaluate_bool(solver->get_value(expression));
-    } else if (expression->get_op() == Op(And)) {
-        for (const auto e: expression) {
-            if (!evaluate_bool(e)) {
-                return false;
-            }
-        }
-        return true;
-    } else if (expression->get_op() == Op(Or)) {
-        for (const auto e: expression) {
-            if (evaluate_bool(e)) {
-                return true;
-            }
-        }
-        return false;
-    } else if (expression->get_op() == Op(Not)) {
-        return !evaluate_bool(*expression->begin());
-    } else if (expression->get_op() == Op(Equal) && (*expression->begin())->get_sort() != util.int_sort) {
-        auto it {expression->begin()};
-        const auto fst {evaluate_bool(*it)};
-        while (++it != expression->end()) {
-            if (evaluate_bool(*it) != fst) {
-                return false;
-            }
-        }
-        return true;
-    } else {
-        const auto test_comparison = [&](const std::function<bool(cpp_int, cpp_int)> &pred) {
-            auto it {expression->begin()};
-            auto cur {evaluate_int(*it)};
-            while (++it != expression->end()) {
-                const auto next {evaluate_int(*it)};
-                if (!pred(cur, next)) {
-                    return false;
-                } else {
-                    cur = next;
-                }
-            }
-            return true;
-        };
-        if (expression->get_op() == Op(Lt)) {
-            return test_comparison([](auto x, auto y) {
-                return x < y;
-            });
-        } else if (expression->get_op() == Op(Le)) {
-            return test_comparison([](auto x, auto y) {
-                return x <= y;
-            });
-        } else if (expression->get_op() == Op(Gt)) {
-            return test_comparison([](auto x, auto y) {
-                return x > y;
-            });
-        } else if (expression->get_op() == Op(Ge)) {
-            return test_comparison([](auto x, auto y) {
-                return x >= y;
-            });
-        } else if (expression->get_op() == Op(Equal)) {
-            return test_comparison([](auto x, auto y) {
-                return x == y;
-            });
-        } else {
-            throw std::invalid_argument("failed to evaluate " + expression->to_string());
-        }
-    }
+    util.solver->dump_smt2(filename);
 }
 
 void Swine::verify() const {
     for (const auto &f: frames) {
         for (const auto &a: f.assertions) {
-            if (!evaluate_bool(a)) {
+            if (!eval.evaluate_bool(a)) {
                 std::cout << "Validation of the following assertion failed:" << std::endl;
                 std::cout << a << std::endl;
                 std::cout << "model:" << std::endl;
@@ -814,12 +699,12 @@ void Swine::brute_force() const {
             exps.push_back(e);
         }
     }
-    BruteForce bf(solver, assertions, exps);
+    BruteForce bf(util.solver, assertions, exps);
     if (bf.check_sat()) {
         std::cout << "sat via brute force" << std::endl;
         for (const auto &f: frames) {
             for (const auto &[l, kind]: f.lemmas) {
-                if (!boost::iequals(solver->get_value(l)->to_string(), "true")) {
+                if (!boost::iequals(util.solver->get_value(l)->to_string(), "true")) {
                     std::cout << "violated " << kind << " lemma" << std::endl;
                     std::cout << l << std::endl;
                 }

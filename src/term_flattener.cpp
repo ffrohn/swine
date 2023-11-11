@@ -1,6 +1,6 @@
 #include "term_flattener.h"
 
-TermFlattener::TermFlattener(SmtSolver solver, Util &util): solver(solver), util(util) {}
+TermFlattener::TermFlattener(Util &util): util(util) {}
 
 bool is_fun_app(const Term term) {
     return !term->is_symbolic_const() && !term->is_param() && !term->is_symbol() && !term->is_value();
@@ -14,7 +14,7 @@ Term TermFlattener::replacement_var(const Term term) {
     }
     while (true) {
         try {
-            const auto res {solver->make_symbol("swine_flat_" + std::to_string(count), term->get_sort())};
+            const auto res {util.solver->make_symbol("swine_flat_" + std::to_string(count), term->get_sort())};
             ++count;
             map.emplace(term, res);
             return res;
@@ -50,12 +50,12 @@ Term TermFlattener::flatten(Term term, UnorderedTermSet &set) {
                 set.insert(*it);
                 snd_arg = replacement_var(*it);
             }
-            const auto res {solver->make_term(Op(Apply), util.exp, fst_arg, snd_arg)};
+            const auto res {util.solver->make_term(Op(Apply), util.exp, fst_arg, snd_arg)};
             exps.insert(res);
             return res;
         }
     }
-    return solver->make_term(term->get_op(), children);
+    return util.solver->make_term(term->get_op(), children);
 }
 
 Term TermFlattener::flatten(Term term) {
@@ -66,9 +66,9 @@ Term TermFlattener::flatten(Term term) {
         return vec.front();
     }
     for (const auto &key: set) {
-        vec.push_back(solver->make_term(Op(Equal), key, map.at(key)));
+        vec.push_back(util.solver->make_term(Op(Equal), key, map.at(key)));
     }
-    return solver->make_term(Op(And), vec);
+    return util.solver->make_term(Op(And), vec);
 }
 
 UnorderedTermSet TermFlattener::clear_exps() {

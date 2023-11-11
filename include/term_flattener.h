@@ -10,8 +10,6 @@ using namespace boost::multiprecision;
 
 class TermFlattener {
 
-    SmtSolver solver;
-
     UnorderedTermMap replacement_map;
 
     UnorderedTermSet exps;
@@ -26,7 +24,7 @@ class TermFlattener {
 
 public:
 
-    TermFlattener(SmtSolver solver, Util &util);
+    TermFlattener(Util &util);
 
     Term flatten(Term term);
 
