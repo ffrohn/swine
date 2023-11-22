@@ -3,15 +3,13 @@
 #include <smt-switch/solver.h>
 #include <boost/multiprecision/cpp_int.hpp>
 
-#include "term_flattener.h"
+#include "preprocessor.h"
 #include "term_evaluator.h"
+#include "exp_finder.h"
+#include "config.h"
 
 using namespace smt;
 using namespace boost::multiprecision;
-
-enum SolverKind {
-    Z3, CVC5, Yices
-};
 
 enum LemmaKind {
     Initial, Tangent, Secant, Monotonicity
@@ -27,7 +25,7 @@ private:
         UnorderedTermSet exps;
         UnorderedTermSet symbols;
         TermVec assertions;
-        TermVec flat_assertions;
+        TermVec preprocessed_assertions;
         std::unordered_map<Term, LemmaKind> lemmas;
     };
 
@@ -41,6 +39,8 @@ private:
         long exponent_val;
     };
 
+    friend std::ostream& operator<<(std::ostream &s, const EvaluatedExponential &exp);
+
     struct Statistics {
         uint iterations {0};
         uint initial_lemmas {0};
@@ -53,21 +53,18 @@ private:
 
     friend std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats);
 
-    SolverKind solver_kind;
     Statistics stats;
     Util util;
-    TermFlattener flattener;
+    Preprocessor preproc;
+    ExpFinder exp_finder;
     TermEvaluator eval;
     std::vector<Frame> frames;
     std::unordered_map<Term, std::vector<long>> secant_points;
+    const Config &config;
 
 public:
 
-    static bool validate;
-    static bool log;
-    static bool statistics;
-
-    Swine(const SmtSolver solver, const SolverKind solver_kind);
+    Swine(const SmtSolver solver, const Config &config);
     Swine(const Swine &) = delete;
     Swine & operator=(const Swine &) = delete;
     ~Swine(){};

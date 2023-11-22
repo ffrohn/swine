@@ -33,14 +33,22 @@ add_executable(${EXECUTABLE} "")
 target_sources(${EXECUTABLE} PRIVATE
     "${PROJECT_SOURCE_DIR}/include/swine.h"
     "${PROJECT_SOURCE_DIR}/src/swine.cpp"
-    "${PROJECT_SOURCE_DIR}/include/term_flattener.h"
     "${PROJECT_SOURCE_DIR}/src/term_evaluator.cpp"
     "${PROJECT_SOURCE_DIR}/include/term_evaluator.h"
-    "${PROJECT_SOURCE_DIR}/src/term_flattener.cpp"
+    "${PROJECT_SOURCE_DIR}/include/constant_propagator.h"
+    "${PROJECT_SOURCE_DIR}/src/constant_propagator.cpp"
+    "${PROJECT_SOURCE_DIR}/include/rewriter.h"
+    "${PROJECT_SOURCE_DIR}/src/rewriter.cpp"
+    "${PROJECT_SOURCE_DIR}/include/preprocessor.h"
+    "${PROJECT_SOURCE_DIR}/src/preprocessor.cpp"
+    "${PROJECT_SOURCE_DIR}/include/exp_finder.h"
+    "${PROJECT_SOURCE_DIR}/src/exp_finder.cpp"
     "${PROJECT_SOURCE_DIR}/include/brute_force.h"
     "${PROJECT_SOURCE_DIR}/src/brute_force.cpp"
     "${PROJECT_SOURCE_DIR}/include/util.h"
     "${PROJECT_SOURCE_DIR}/src/util.cpp"
+    "${PROJECT_SOURCE_DIR}/include/config.h"
+    "${PROJECT_SOURCE_DIR}/src/main.cpp"
 )
 
 include_directories(${INCLUDE_DIRS})

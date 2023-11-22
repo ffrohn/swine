@@ -2,11 +2,6 @@
 
 #include "brute_force.h"
 
-#include <smt-switch/smtlib_reader.h>
-#include <smt-switch/cvc5_factory.h>
-#include <smt-switch/z3_factory.h>
-//#include "smt-switch/yices2_factory.h"
-#include <boost/algorithm/string.hpp>
 #include <assert.h>
 
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind) {
@@ -24,16 +19,27 @@ std::ostream& operator<<(std::ostream &s, const LemmaKind kind) {
     return s;
 }
 
-bool Swine::validate {false};
-bool Swine::log {false};
-bool Swine::statistics {false};
+std::ostream& operator<<(std::ostream &s, const Swine::EvaluatedExponential &exp) {
+    return s <<
+           "abstract: exp(" <<
+           exp.base <<
+           ", " <<
+           exp.exponent <<
+           "); concrete: exp(" <<
+           exp.base_val <<
+           ", " <<
+           exp.exponent_val <<
+           ") = " <<
+           exp.exp_expression_val;
+}
 
-Swine::Swine(const SmtSolver solver, const SolverKind solver_kind):
+Swine::Swine(const SmtSolver solver, const Config &config):
     AbsSmtSolver(solver->get_solver_enum()),
-    solver_kind(solver_kind),
-    util(solver),
-    flattener(util),
-    eval(util) {
+    util(solver, config),
+    preproc(util),
+    exp_finder(util),
+    eval(util),
+    config(config) {
     solver->set_opt("produce-models", "true");
     frames.emplace_back();
 }
@@ -48,7 +54,7 @@ void Swine::set_logic(const std::string logic) {
 
 void Swine::add_lemma(const Term t, const LemmaKind kind) {
     util.solver->assert_formula(t);
-    if (validate) frames.back().lemmas.emplace(t, kind);
+    if (config.validate) frames.back().lemmas.emplace(t, kind);
     switch (kind) {
     case Tangent: ++stats.tangent_lemmas;
         break;
@@ -72,7 +78,7 @@ void Swine::add_initial_lemmas(const Term e) {
     ++it;
     const auto exp {*it};
     const auto pos {make_term(Op(Gt), exp, util.term(0))};
-    if (log) std::cout << "initial lemmas" << std::endl;
+    if (config.log) std::cout << "initial lemmas" << std::endl;
     Term lemma;
     // exp = 0 ==> base^exp = 1
     lemma =
@@ -80,7 +86,7 @@ void Swine::add_initial_lemmas(const Term e) {
             Op(Implies),
             make_term(Op(Equal), exp, util.term(0)),
             make_term(Op(Equal), e, util.term(1)));
-    if (log) std::cout << lemma << std::endl;
+    if (config.log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
     // exp > 0 && base = 0 ==> base^exp = 0
     lemma =
@@ -91,7 +97,7 @@ void Swine::add_initial_lemmas(const Term e) {
                 pos,
                 make_term(Op(Equal), base, util.term(0))),
             make_term(Op(Equal), e, util.term(0)));
-    if (log) std::cout << lemma << std::endl;
+    if (config.log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
     // exp > 0 && base = 1 ==> base^exp = 1
     lemma =
@@ -102,7 +108,7 @@ void Swine::add_initial_lemmas(const Term e) {
                 pos,
                 make_term(Op(Equal), base, util.term(1))),
             make_term(Op(Equal), e, util.term(1)));
-    if (log) std::cout << lemma << std::endl;
+    if (config.log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
     // exp > 0 && base > 1 ==> base^exp > exp
     lemma =
@@ -113,26 +119,29 @@ void Swine::add_initial_lemmas(const Term e) {
                 pos,
                 make_term(Op(Gt), base, util.term(1))),
             make_term(Op(Gt), e, exp));
-    if (log) std::cout << lemma << std::endl;
+    if (config.log) std::cout << lemma << std::endl;
     add_lemma(lemma, Initial);
 }
 
 void Swine::assert_formula(const Term & t) {
     ++stats.num_assertions;
-    const auto flat {flattener.flatten(t)};
-    if (log && flat != t) {
-        std::cout << "flattening" << std::endl;
+    const auto preprocessed {preproc.preprocess(t)};
+    if (config.log && preprocessed != t) {
+        std::cout << "preprocessing" << std::endl;
         std::cout << "original term:" << std::endl;
         std::cout << t << std::endl;
-        std::cout << "new term" << std::endl;
-        std::cout << flat << std::endl;
+        std::cout << "new term:" << std::endl;
+        std::cout << preprocessed << std::endl;
     }
-    if (validate) {
+    if (config.validate) {
         frames.back().assertions.push_back(t);
-        frames.back().flat_assertions.push_back(flat);
+        frames.back().preprocessed_assertions.push_back(preprocessed);
     }
-    util.solver->assert_formula(flat);
-    const auto exps {flattener.clear_exps()};
+    util.solver->assert_formula(preprocessed);
+    const auto exps {exp_finder.find_exps(preprocessed)};
+    for (const auto &e: exps) {
+        std::cout << e << std::endl;
+    }
     if (!exps.empty()) {
         frames.back().exps.insert(exps.begin(), exps.end());
         for (const auto &e: exps) {
@@ -188,7 +197,7 @@ Term Swine::tangent_lemma(const EvaluatedExponential &e, const bool next) {
         Op(Implies),
         make_term(Op(Ge), e.exponent, util.term(0)),
         make_term(Op(Ge), e.exp_expression, tangent))};
-    if (log) std::cout << tangent_lemma << std::endl;
+    if (config.log) std::cout << tangent_lemma << std::endl;
     return tangent_lemma;
 }
 
@@ -233,7 +242,7 @@ Term Swine::secant_lemma(const EvaluatedExponential &e, const long other_exponen
             Op(Le),
             make_term(Op(Mult), util.term(factor), e.exp_expression),
             secant))};
-    if (log) std::cout << res << std::endl;
+    if (config.log) std::cout << res << std::endl;
     return res;
 }
 
@@ -318,7 +327,7 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
                 smaller.exponent),
             premise),
         make_term(Op(Lt), smaller.exp_expression, greater.exp_expression))};
-    if (log) {
+    if (config.log) {
         std::cout << "monotonicity lemma" << std::endl;
         std::cout << monotonicity_lemma << std::endl;
     }
@@ -327,19 +336,19 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
 
 void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     // search for pairs exp(b,e1), exp(b,e2) whose models violate monotonicity of exp
-    for (auto it1 = frames.begin(); it1 != frames.end(); ++it1) {
-        for (const auto &exp1: it1->exps) {
-            const auto e1 {evaluate_exponential(exp1)};
-            if (e1 && e1->base_val > 1) {
-                for (auto it2 = it1; ++it2 != frames.end();) {
-                    for (const auto &exp2: it2->exps) {
-                        const auto e2 {evaluate_exponential(exp2)};
-                        if (e2 && e2->base_val > 1) {
-                            const auto mon_lemma {monotonicity_lemma(*e1, *e2)};
-                            if (mon_lemma) {
-                                lemmas.emplace(*mon_lemma, Monotonicity);
-                            }
-                        }
+    TermVec exps;
+    for (const auto &f: frames) {
+        exps.insert(exps.end(), f.exps.begin(), f.exps.end());
+    }
+    for (auto it1 = exps.begin(); it1 != exps.end(); ++it1) {
+        const auto e1 {evaluate_exponential(*it1)};
+        if (e1 && e1->base_val > 1) {
+            for (auto it2 = it1; ++it2 != exps.end();) {
+                const auto e2 {evaluate_exponential(*it2)};
+                if (e2 && e2->base_val > 1) {
+                    const auto mon_lemma {monotonicity_lemma(*e1, *e2)};
+                    if (mon_lemma) {
+                        lemmas.emplace(*mon_lemma, Monotonicity);
                     }
                 }
             }
@@ -353,7 +362,7 @@ Result Swine::check_sat() {
         ++stats.iterations;
         res = util.solver->check_sat();
         if (res.is_unsat()) {
-            if (validate) {
+            if (config.validate) {
                 brute_force();
             }
             break;
@@ -361,7 +370,7 @@ Result Swine::check_sat() {
             break;
         } else if (res.is_sat()) {
             bool sat {true};
-            if (log) {
+            if (config.log) {
                 std::cout << "candidate model:" << std::endl;
                 for (const auto &[key,val]: get_model()) {
                     std::cout << key << " = " << val << std::endl;
@@ -372,21 +381,21 @@ Result Swine::check_sat() {
             for (const auto &f: frames) {
                 for (const auto &e: f.exps) {
                     const auto ee {evaluate_exponential(e)};
-                    if (log) {
-                        std::cout << "trying to lift model for " << e << std::endl;
-                        std::cout << "base: " << ee->base_val << std::endl;
-                        std::cout << "exponent: " << ee->exponent_val << std::endl;
-                        std::cout << "e: " << ee->exp_expression_val << std::endl;
-                    }
                     // if the exponent is negative, integer exponentiation is undefined
                     // in smtlib, this means that the result can be arbitrary
                     if (ee && ee->exponent_val >= 0) {
+                        if (config.log) {
+                            std::cout << "trying to lift model for " << e << std::endl;
+                            std::cout << "base: " << ee->base_val << std::endl;
+                            std::cout << "exponent: " << ee->exponent_val << std::endl;
+                            std::cout << "e: " << ee->exp_expression_val << std::endl;
+                        }
                         if (ee->exp_expression_val < ee->expected_val) {
-                            if (log) std::cout << "tangent refinement" << std::endl;
+                            if (config.log) std::cout << "tangent refinement" << std::endl;
                             tangent_lemmas(*ee, lemmas);
                             sat = false;
                         } else if (ee->exp_expression_val > ee->expected_val) {
-                            if (log) std::cout << "secant refinement" << std::endl;
+                            if (config.log) std::cout << "secant refinement" << std::endl;
                             secant_lemmas(*ee, lemmas);
                             sat = false;
                         }
@@ -394,7 +403,7 @@ Result Swine::check_sat() {
                 }
             }
             if (sat) {
-                if (validate) {
+                if (config.validate) {
                     verify();
                 }
                 break;
@@ -405,7 +414,7 @@ Result Swine::check_sat() {
             }
         }
     }
-    if (statistics) {
+    if (config.statistics) {
         std::cout << stats << std::endl;
     }
     return res;
@@ -600,7 +609,7 @@ Term Swine::make_term(Op op,
 
 Term Swine::make_term(Op op, const TermVec & terms) const {
     const auto mk_term = [&](const TermVec &terms) {
-        if (op == Op(Mult) && solver_kind == SolverKind::Z3) {
+        if (op == Op(Mult) && config.solver_kind == SolverKind::Z3) {
             auto it {terms.begin()};
             auto res {*it};
             while (++it != terms.end()) {
@@ -611,32 +620,10 @@ Term Swine::make_term(Op op, const TermVec & terms) const {
             return util.solver->make_term(op, terms);
         }
     };
-    std::vector<std::optional<cpp_int>> ints;
-    TermVec ts;
-    bool ground {true};
-    for (const auto &t: terms) {
-        ints.push_back(t->get_sort() == util.int_sort ? eval.evaluate_ground_int(t) : std::optional<cpp_int>());
-        ts.push_back(ints.back() ? util.term(*ints.back()) : t);
-        ground = ground && ints.back();
-    }
     if (op == Op(Exp)) {
-        const auto snd_int {*(++ints.begin())};
-        if (snd_int && *snd_int < 0) {
-            return util.solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
-        }
-    }
-    if (ground) {
-        const auto t {mk_term(ts)};
-        return t->get_sort() == util.int_sort ? util.term(*eval.evaluate_ground_int(t)) : t;
-    } else if (op == Op(Exp)) {
-        const auto snd_int {*(++ints.begin())};
-        if (snd_int) {
-            return util.solver->make_term(Op(Pow), ts);
-        } else {
-            return util.solver->make_term(Op(Apply), util.exp, ts.front(), *(++ts.begin()));
-        }
+        return util.solver->make_term(Op(Apply), util.exp, terms.front(), *(++terms.begin()));
     } else {
-        return mk_term(ts);
+        return mk_term(terms);
     }
 }
 
@@ -689,7 +676,7 @@ void Swine::verify() const {
 void Swine::brute_force() const {
     TermVec assertions;
     for (const auto &f: frames) {
-        for (const auto &a: f.flat_assertions) {
+        for (const auto &a: f.preprocessed_assertions) {
             assertions.push_back(a);
         }
     }
@@ -704,7 +691,7 @@ void Swine::brute_force() const {
         std::cout << "sat via brute force" << std::endl;
         for (const auto &f: frames) {
             for (const auto &[l, kind]: f.lemmas) {
-                if (!boost::iequals(util.solver->get_value(l)->to_string(), "true")) {
+                if (util.solver->get_value(l) != util.True) {
                     std::cout << "violated " << kind << " lemma" << std::endl;
                     std::cout << l << std::endl;
                 }
@@ -725,52 +712,3 @@ std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats) {
     return s;
 }
 
-int main(int argc, char *argv[]) {
-    int arg = 0;
-    auto get_next = [&]() {
-        if (arg < argc-1) {
-            return argv[++arg];
-        } else {
-            std::cout << "Error: Argument missing for " << argv[arg] << std::endl;
-            exit(1);
-        }
-    };
-    SmtSolver solver;
-    SolverKind solver_kind {SolverKind::Z3};
-    std::optional<std::string> input;
-    while (++arg < argc) {
-        if (boost::iequals(argv[arg], "--solver")) {
-            const std::string solver_str {get_next()};
-            if (boost::iequals(solver_str, "z3")) {
-                solver = smt::Z3SolverFactory::create(false);
-                solver_kind = SolverKind::Z3;
-            } else if (boost::iequals(solver_str, "cvc5")) {
-                solver = smt::Cvc5SolverFactory::create(false);
-                solver_kind = SolverKind::CVC5;
-                //            } else if (boost::iequals(solver_str, "yices")) {
-                //                solver = smt::Yices2SolverFactory::create(false);
-                //                solver_kind = SolverKind::Yices;
-            } else {
-                throw std::invalid_argument("unknown solver " + solver_str);
-            }
-        } else if (boost::iequals(argv[arg], "--validate")) {
-            Swine::validate = true;
-        } else if (boost::iequals(argv[arg], "--log")) {
-            Swine::log = true;
-        } else if (boost::iequals(argv[arg], "--stats")) {
-            Swine::statistics = true;
-        } else if (!input) {
-            input = argv[arg];
-        } else {
-            throw std::invalid_argument("extra argument " + std::string(argv[arg]));
-        }
-    }
-    if (!solver) {
-        solver = smt::Z3SolverFactory::create(false);
-    }
-    if (!input) {
-        throw std::invalid_argument("missing input file");
-    }
-    SmtSolver swine = std::make_shared<Swine>(solver, solver_kind);
-    return SmtLibReader(swine).parse(*input);
-}
