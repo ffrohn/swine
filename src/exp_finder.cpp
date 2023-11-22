@@ -8,7 +8,15 @@ void ExpFinder::find_exps(Term term, UnorderedTermSet &res) {
             find_exps(c, res);
         }
         if (util.is_abstract_exp(term)) {
-            res.insert(term);
+            const auto [base, exp] {util.decompose_exp(term)};
+            if (base->is_value() && util.value(base) < 0) {
+                res.insert(util.make_exp(
+                    util.solver->make_term(Negate, base),
+                    exp
+                    ));
+            } else {
+                res.insert(term);
+            }
         }
     }
 }

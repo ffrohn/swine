@@ -152,6 +152,10 @@ Term ConstantPropagator::propagate(Term expression) const {
             }
             if (ground) {
                 return util.term(pow(util.value(children.at(0)), stol(util.value(children.at(1)).str())));
+            } else if (children.at(0) == util.term(1) || children.at(1) == util.term(0)) {
+                return util.term(1);
+            } else if (children.at(1) == util.term(1)) {
+                return children.at(0);
             }
             break;
         }
@@ -163,8 +167,11 @@ Term ConstantPropagator::propagate(Term expression) const {
                         return util.term(pow(util.value(children.at(1)), abs(stol(exponent.str()))));
                     }
                 }
-            } else if (children.at(2) == util.term(1) && util.config.semantics == Total) {
-                return util.term(1);
+                if ((children.at(1) == util.term(1) && util.config.semantics == Total) || children.at(2) == util.term(0)) {
+                    return util.term(1);
+                } else if (children.at(2) == util.term(1) || (children.at(2) == util.term(-1) && util.config.semantics == Total)) {
+                    return children.at(1);
+                }
             }
             break;
         }

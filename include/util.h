@@ -25,5 +25,6 @@ public:
     bool is_app(const Term term) const;
     bool is_abstract_exp(const Term term) const;
     std::pair<Term, Term> decompose_exp(const Term term) const;
+    Term make_exp(const Term base, const Term exponent);
 
 };

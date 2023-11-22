@@ -39,3 +39,7 @@ std::pair<Term, Term> Util::decompose_exp(const Term term) const {
     auto it {term->begin()};
     return {*(++it), *(++it)};
 }
+
+Term Util::make_exp(const Term base, const Term exponent) {
+    return solver->make_term(Apply, exp, base, exponent);
+}

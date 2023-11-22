@@ -6,7 +6,9 @@
 
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind) {
     switch (kind) {
-    case Initial: s << "initial";
+    case Symmetry: s << "symmetry";
+        break;
+    case Bounding: s << "bounding";
         break;
     case Tangent: s << "tangent";
         break;
@@ -31,6 +33,18 @@ std::ostream& operator<<(std::ostream &s, const Swine::EvaluatedExponential &exp
            exp.exponent_val <<
            ") = " <<
            exp.exp_expression_val;
+}
+
+std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats) {
+    s << "assertions:          " << stats.num_assertions << std::endl;
+    s << "iterations:          " << stats.iterations << std::endl;
+    s << "symmetry lemmas:     " << stats.symmetry_lemmas << std::endl;
+    s << "bounding lemmas:     " << stats.bounding_lemmas << std::endl;
+    s << "tangent lemmas:      " << stats.tangent_lemmas << std::endl;
+    s << "secant lemmas:       " << stats.secant_lemmas << std::endl;
+    s << "monotonicity lemmas: " << stats.monotonicity_lemmas << std::endl;
+    s << "non constant base:   " << (stats.non_constant_base ? "true" : "false") << std::endl;
+    return s;
 }
 
 Swine::Swine(const SmtSolver solver, const Config &config):
@@ -60,7 +74,9 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
         break;
     case Secant: ++stats.secant_lemmas;
         break;
-    case Initial: ++stats.initial_lemmas;
+    case Symmetry: ++stats.symmetry_lemmas;
+        break;
+    case Bounding: ++stats.bounding_lemmas;
         break;
     case Monotonicity: ++stats.monotonicity_lemmas;
         break;
@@ -68,59 +84,151 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
     }
 }
 
-void Swine::add_initial_lemmas(const Term e) {
-    auto it {e->begin()};
-    ++it;
-    const auto base {*it};
+void Swine::add_symmetry_lemmas(const Term e) {
+    const auto [base, exp] {util.decompose_exp(e)};
     if (!base->is_value()) {
         stats.non_constant_base = true;
     }
-    ++it;
-    const auto exp {*it};
-    const auto pos {make_term(Op(Gt), exp, util.term(0))};
-    if (config.log) std::cout << "initial lemmas" << std::endl;
+    if (config.semantics == Total) {
+        const auto lemma {make_term(
+            Op(Equal),
+            e,
+            util.make_exp(base, make_term(Op(Negate), exp)))};
+        add_lemma(lemma, Symmetry);
+    }
+    const auto conclusion_even {make_term(
+        Op(Equal),
+        e,
+        util.make_exp(
+            make_term(Op(Negate), base),
+            exp))};
+    const auto conclusion_odd {make_term(
+        Op(Equal),
+        e,
+        make_term(
+            Op(Negate),
+            util.make_exp(
+                make_term(Op(Negate), base),
+                exp)))};
+    auto premise_even {make_term(
+        Op(Equal),
+        make_term(Op(Mod), exp, util.term(2)),
+        util.term(0))};
+    auto premise_odd {make_term(
+        Op(Equal),
+        make_term(Op(Mod), exp, util.term(2)),
+        util.term(1))};
+    if (config.semantics == Partial) {
+        premise_even = make_term(
+            Op(And),
+            premise_even,
+            make_term(Op(Ge), exp, util.term(0)));
+        premise_odd = make_term(
+            Op(And),
+            premise_odd,
+            make_term(Op(Gt), exp, util.term(0)));
+    }
+    add_lemma(make_term(Op(Implies), premise_even, conclusion_even), Symmetry);
+    add_lemma(make_term(Op(Implies), premise_odd, conclusion_odd), Symmetry);
+}
+
+void Swine::compute_bounding_lemmas(const Term e) {
+    auto [it, inserted] {frames.back().bounding_lemmas.emplace(e, TermVec())};
+    if (!inserted) {
+        return;
+    }
+    auto &set {it->second};
+    const auto [base, exp] {util.decompose_exp(e)};
+    if (config.log) std::cout << "bounding lemmas" << std::endl;
     Term lemma;
     // exp = 0 ==> base^exp = 1
-    lemma =
-        make_term(
-            Op(Implies),
-            make_term(Op(Equal), exp, util.term(0)),
-            make_term(Op(Equal), e, util.term(1)));
+    lemma = make_term(
+        Op(Implies),
+        make_term(Op(Equal), exp, util.term(0)),
+        make_term(Op(Equal), e, util.term(1)));
     if (config.log) std::cout << lemma << std::endl;
-    add_lemma(lemma, Initial);
-    // exp > 0 && base = 0 ==> base^exp = 0
-    lemma =
-        make_term(
+    set.push_back(lemma);
+    // exp = 1 ==> base^exp = base
+    lemma = make_term(
+        Op(Implies),
+        make_term(Op(Equal), exp, util.term(1)),
+        make_term(Op(Equal), e, base));
+    if (config.log) std::cout << lemma << std::endl;
+    set.push_back(lemma);
+    if (!base->is_value() || util.value(base) == 0) {
+        // base = 0 && ... ==> base^exp = 0
+        const auto conclusion {make_term(Op(Equal), e, util.term(0))};
+        TermVec premises {make_term(Op(Equal), base, util.term(0))};
+        if (config.semantics == Total) {
+            premises.push_back(make_term(Op(Distinct), base, util.term(0)));
+        } else {
+            premises.push_back(make_term(Op(Gt), exp, util.term(0)));
+        }
+        lemma = make_term(
+            Op(Implies),
+            make_term(Op(And), premises),
+            conclusion);
+        if (config.log) std::cout << lemma << std::endl;
+        set.push_back(lemma);
+    }
+    if (!base->is_value() || util.value(base) == 1) {
+        // base = 1 && ... ==> base^exp = 1
+        const auto conclusion {make_term(Op(Equal), e, util.term(1))};
+        TermVec premises {make_term(Op(Equal), base, util.term(1))};
+        if (config.semantics == Partial) {
+            premises.push_back(make_term(Op(Ge), exp, util.term(0)));
+        }
+        lemma = make_term(
+            Op(Implies),
+            make_term(Op(And), premises),
+            conclusion);
+        if (config.log) std::cout << lemma << std::endl;
+        set.push_back(lemma);
+    }
+    if (!base->is_value() || util.value(base) > 1) {
+        // exp + base > 4 && s > 1 && t > 1 ==> base^exp > s * t + 1
+        lemma = make_term(
             Op(Implies),
             make_term(
                 Op(And),
-                pos,
-                make_term(Op(Equal), base, util.term(0))),
-            make_term(Op(Equal), e, util.term(0)));
-    if (config.log) std::cout << lemma << std::endl;
-    add_lemma(lemma, Initial);
-    // exp > 0 && base = 1 ==> base^exp = 1
-    lemma =
-        make_term(
-            Op(Implies),
+                make_term(
+                    Op(Gt),
+                    make_term(Op(Plus), base, exp),
+                    util.term(4)),
+                make_term(Op(Gt), base, util.term(1)),
+                make_term(Op(Gt), exp, util.term(1))),
             make_term(
-                Op(And),
-                pos,
-                make_term(Op(Equal), base, util.term(1))),
-            make_term(Op(Equal), e, util.term(1)));
-    if (config.log) std::cout << lemma << std::endl;
-    add_lemma(lemma, Initial);
-    // exp > 0 && base > 1 ==> base^exp > exp
-    lemma =
-        make_term(
-            Op(Implies),
-            make_term(
-                Op(And),
-                pos,
-                make_term(Op(Gt), base, util.term(1))),
-            make_term(Op(Gt), e, exp));
-    if (config.log) std::cout << lemma << std::endl;
-    add_lemma(lemma, Initial);
+                Op(Gt),
+                e,
+                make_term(
+                    Op(Plus),
+                    make_term(
+                        Op(Mult),
+                        base,
+                        exp),
+                    util.term(1))));
+        if (config.log) std::cout << lemma << std::endl;
+        set.push_back(lemma);
+    }
+}
+
+void Swine::bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &lemmas) {
+    UnorderedTermSet seen;
+    for (auto &f: frames) {
+        auto map_it {f.bounding_lemmas.find(e)};
+        if (map_it != f.bounding_lemmas.end()) {
+            auto &set {map_it->second};
+            for (auto set_it = set.begin(); set_it != set.end();) {
+                if (util.solver->get_value(*set_it) != util.True && !seen.contains(*set_it)) {
+                    lemmas.emplace(*set_it, Bounding);
+                    seen.insert(*set_it);
+                    set_it = set.erase(set_it);
+                } else {
+                    ++set_it;
+                }
+            }
+        }
+    }
 }
 
 void Swine::assert_formula(const Term & t) {
@@ -145,7 +253,8 @@ void Swine::assert_formula(const Term & t) {
     if (!exps.empty()) {
         frames.back().exps.insert(exps.begin(), exps.end());
         for (const auto &e: exps) {
-            add_initial_lemmas(e);
+            add_symmetry_lemmas(e);
+            compute_bounding_lemmas(e);
         }
     }
 }
@@ -173,10 +282,10 @@ std::optional<Swine::EvaluatedExponential> Swine::evaluate_exponential(const Ter
     ++it;
     res.exponent = *it;
     res.exponent_val = to_int(get_value(*it));
-    if (res.exponent_val < 0) {
+    if (util.config.semantics == Partial && res.exponent_val < 0) {
         return {};
     }
-    res.expected_val = boost::multiprecision::pow(res.base_val, res.exponent_val);
+    res.expected_val = boost::multiprecision::pow(res.base_val, abs(res.exponent_val));
     return res;
 }
 
@@ -381,23 +490,20 @@ Result Swine::check_sat() {
             for (const auto &f: frames) {
                 for (const auto &e: f.exps) {
                     const auto ee {evaluate_exponential(e)};
-                    // if the exponent is negative, integer exponentiation is undefined
-                    // in smtlib, this means that the result can be arbitrary
-                    if (ee && ee->exponent_val >= 0) {
-                        if (config.log) {
-                            std::cout << "trying to lift model for " << e << std::endl;
-                            std::cout << "base: " << ee->base_val << std::endl;
-                            std::cout << "exponent: " << ee->exponent_val << std::endl;
-                            std::cout << "e: " << ee->exp_expression_val << std::endl;
-                        }
-                        if (ee->exp_expression_val < ee->expected_val) {
-                            if (config.log) std::cout << "tangent refinement" << std::endl;
-                            tangent_lemmas(*ee, lemmas);
-                            sat = false;
-                        } else if (ee->exp_expression_val > ee->expected_val) {
-                            if (config.log) std::cout << "secant refinement" << std::endl;
-                            secant_lemmas(*ee, lemmas);
-                            sat = false;
+                    if (ee) {
+                        auto valid {ee->exp_expression_val == ee->expected_val};
+                        sat &= valid;
+                        if (!valid) {
+                            bounding_lemmas(e, lemmas);
+                            if (ee->exponent_val >= 0) {
+                                if (ee->exp_expression_val < ee->expected_val) {
+                                    if (config.log) std::cout << "tangent refinement" << std::endl;
+                                    tangent_lemmas(*ee, lemmas);
+                                } else if (ee->exp_expression_val > ee->expected_val) {
+                                    if (config.log) std::cout << "secant refinement" << std::endl;
+                                    secant_lemmas(*ee, lemmas);
+                                }
+                            }
                         }
                     }
                 }
@@ -608,22 +714,17 @@ Term Swine::make_term(Op op,
 }
 
 Term Swine::make_term(Op op, const TermVec & terms) const {
-    const auto mk_term = [&](const TermVec &terms) {
-        if (op == Op(Mult) && config.solver_kind == SolverKind::Z3) {
-            auto it {terms.begin()};
-            auto res {*it};
-            while (++it != terms.end()) {
-                res = util.solver->make_term(op, res, *it);
-            }
-            return res;
-        } else {
-            return util.solver->make_term(op, terms);
-        }
-    };
     if (op == Op(Exp)) {
         return util.solver->make_term(Op(Apply), util.exp, terms.front(), *(++terms.begin()));
+    } else if (op == Op(Mult) && config.solver_kind == SolverKind::Z3) {
+        auto it {terms.begin()};
+        auto res {*it};
+        while (++it != terms.end()) {
+            res = util.solver->make_term(op, res, *it);
+        }
+        return res;
     } else {
-        return mk_term(terms);
+        return util.solver->make_term(op, terms);
     }
 }
 
@@ -700,15 +801,3 @@ void Swine::brute_force() const {
         verify();
     }
 }
-
-std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats) {
-    s << "assertions:          " << stats.num_assertions << std::endl;
-    s << "iterations:          " << stats.iterations << std::endl;
-    s << "initial lemmas:      " << stats.initial_lemmas << std::endl;
-    s << "tangent lemmas:      " << stats.tangent_lemmas << std::endl;
-    s << "secant lemmas:       " << stats.secant_lemmas << std::endl;
-    s << "monotonicity lemmas: " << stats.monotonicity_lemmas << std::endl;
-    s << "non constant base:   " << (stats.non_constant_base ? "true" : "false") << std::endl;
-    return s;
-}
-

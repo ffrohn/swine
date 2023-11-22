@@ -4,7 +4,6 @@
 #include <boost/multiprecision/cpp_int.hpp>
 
 #include "preprocessor.h"
-#include "term_evaluator.h"
 #include "exp_finder.h"
 #include "config.h"
 
@@ -12,7 +11,7 @@ using namespace smt;
 using namespace boost::multiprecision;
 
 enum LemmaKind {
-    Initial, Tangent, Secant, Monotonicity
+    Symmetry, Bounding, Tangent, Secant, Monotonicity
 };
 
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind);
@@ -27,6 +26,7 @@ private:
         TermVec assertions;
         TermVec preprocessed_assertions;
         std::unordered_map<Term, LemmaKind> lemmas;
+        std::unordered_map<Term, TermVec> bounding_lemmas;
     };
 
     struct EvaluatedExponential {
@@ -43,7 +43,8 @@ private:
 
     struct Statistics {
         uint iterations {0};
-        uint initial_lemmas {0};
+        uint symmetry_lemmas {0};
+        uint bounding_lemmas {0};
         uint tangent_lemmas {0};
         uint secant_lemmas {0};
         uint monotonicity_lemmas {0};
@@ -137,7 +138,9 @@ public:
                     const UnorderedTermMap & substitution_map) const override;
     void dump_smt2(std::string filename) const override;
 
-    void add_initial_lemmas(const Term e);
+    void add_symmetry_lemmas(const Term e);
+    void compute_bounding_lemmas(const Term e);
+    void bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &lemmas);
     std::optional<EvaluatedExponential> evaluate_exponential(const Term exp_expression) const;
     Term tangent_lemma(const EvaluatedExponential &e, const bool next);
     void tangent_lemmas(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas);
