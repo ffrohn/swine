@@ -752,7 +752,7 @@ void Swine::dump_smt2(std::string filename) const {
 void Swine::verify() const {
     for (const auto &f: frames) {
         for (const auto &a: f.assertions) {
-            if (!eval.evaluate_bool(a)) {
+            if (eval.evaluate(a) != util.True) {
                 std::cout << "Validation of the following assertion failed:" << std::endl;
                 std::cout << a << std::endl;
                 std::cout << "model:" << std::endl;
