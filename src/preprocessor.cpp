@@ -27,12 +27,20 @@ Term Preprocessor::exp_to_pow(Term term) {
 }
 
 Term Preprocessor::preprocess(Term term) {
-    Term cterm {constant_propagator.propagate(term)};
-    Term rterm {rewriter.rewrite(cterm)};
+    auto cterm {constant_propagator.propagate(term)};
+    auto rterm {rewriter.rewrite(cterm)};
     while (term != cterm && cterm != rterm) {
         term = rterm;
         cterm = constant_propagator.propagate(term);
         rterm = term == cterm ? cterm : rewriter.rewrite(cterm);
     }
-    return exp_to_pow(rterm);
+    const auto res {exp_to_pow(rterm)};
+    if (util.config.log && res != term) {
+        std::cout << "preprocessing" << std::endl;
+        std::cout << "original term:" << std::endl;
+        std::cout << term << std::endl;
+        std::cout << "new term:" << std::endl;
+        std::cout << res << std::endl;
+    }
+    return res;
 }

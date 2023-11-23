@@ -10,9 +10,7 @@ std::ostream& operator<<(std::ostream &s, const LemmaKind kind) {
         break;
     case Bounding: s << "bounding";
         break;
-    case Tangent: s << "tangent";
-        break;
-    case Secant: s << "secant";
+    case Interpolation: s << "interpolation";
         break;
     case Monotonicity: s << "monotonicity";
         break;
@@ -36,14 +34,13 @@ std::ostream& operator<<(std::ostream &s, const Swine::EvaluatedExponential &exp
 }
 
 std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats) {
-    s << "assertions:          " << stats.num_assertions << std::endl;
-    s << "iterations:          " << stats.iterations << std::endl;
-    s << "symmetry lemmas:     " << stats.symmetry_lemmas << std::endl;
-    s << "bounding lemmas:     " << stats.bounding_lemmas << std::endl;
-    s << "tangent lemmas:      " << stats.tangent_lemmas << std::endl;
-    s << "secant lemmas:       " << stats.secant_lemmas << std::endl;
-    s << "monotonicity lemmas: " << stats.monotonicity_lemmas << std::endl;
-    s << "non constant base:   " << (stats.non_constant_base ? "true" : "false") << std::endl;
+    s << "assertions:           " << stats.num_assertions << std::endl;
+    s << "iterations:           " << stats.iterations << std::endl;
+    s << "symmetry lemmas:      " << stats.symmetry_lemmas << std::endl;
+    s << "bounding lemmas:      " << stats.bounding_lemmas << std::endl;
+    s << "interpolation lemmas: " << stats.interpolation_lemmas << std::endl;
+    s << "monotonicity lemmas:  " << stats.monotonicity_lemmas << std::endl;
+    s << "non constant base:    " << (stats.non_constant_base ? "true" : "false") << std::endl;
     return s;
 }
 
@@ -67,12 +64,14 @@ void Swine::set_logic(const std::string logic) {
 }
 
 void Swine::add_lemma(const Term t, const LemmaKind kind) {
-    util.solver->assert_formula(t);
+    if (config.log) {
+        std::cout << kind << " lemma:" << std::endl;
+        std::cout << t << std::endl;
+    }
+    util.solver->assert_formula(preproc.preprocess(t));
     if (config.validate) frames.back().lemmas.emplace(t, kind);
     switch (kind) {
-    case Tangent: ++stats.tangent_lemmas;
-        break;
-    case Secant: ++stats.secant_lemmas;
+    case Interpolation: ++stats.interpolation_lemmas;
         break;
     case Symmetry: ++stats.symmetry_lemmas;
         break;
@@ -139,21 +138,18 @@ void Swine::compute_bounding_lemmas(const Term e) {
     }
     auto &set {it->second};
     const auto [base, exp] {util.decompose_exp(e)};
-    if (config.log) std::cout << "bounding lemmas" << std::endl;
     Term lemma;
     // exp = 0 ==> base^exp = 1
     lemma = make_term(
         Op(Implies),
         make_term(Op(Equal), exp, util.term(0)),
         make_term(Op(Equal), e, util.term(1)));
-    if (config.log) std::cout << lemma << std::endl;
     set.push_back(lemma);
     // exp = 1 ==> base^exp = base
     lemma = make_term(
         Op(Implies),
         make_term(Op(Equal), exp, util.term(1)),
         make_term(Op(Equal), e, base));
-    if (config.log) std::cout << lemma << std::endl;
     set.push_back(lemma);
     if (!base->is_value() || util.value(base) == 0) {
         // base = 0 && ... ==> base^exp = 0
@@ -168,7 +164,6 @@ void Swine::compute_bounding_lemmas(const Term e) {
             Op(Implies),
             make_term(Op(And), premises),
             conclusion);
-        if (config.log) std::cout << lemma << std::endl;
         set.push_back(lemma);
     }
     if (!base->is_value() || util.value(base) == 1) {
@@ -182,7 +177,6 @@ void Swine::compute_bounding_lemmas(const Term e) {
             Op(Implies),
             make_term(Op(And), premises),
             conclusion);
-        if (config.log) std::cout << lemma << std::endl;
         set.push_back(lemma);
     }
     if (!base->is_value() || util.value(base) > 1) {
@@ -207,7 +201,6 @@ void Swine::compute_bounding_lemmas(const Term e) {
                         base,
                         exp),
                     util.term(1))));
-        if (config.log) std::cout << lemma << std::endl;
         set.push_back(lemma);
     }
 }
@@ -234,13 +227,6 @@ void Swine::bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &l
 void Swine::assert_formula(const Term & t) {
     ++stats.num_assertions;
     const auto preprocessed {preproc.preprocess(t)};
-    if (config.log && preprocessed != t) {
-        std::cout << "preprocessing" << std::endl;
-        std::cout << "original term:" << std::endl;
-        std::cout << t << std::endl;
-        std::cout << "new term:" << std::endl;
-        std::cout << preprocessed << std::endl;
-    }
     if (config.validate) {
         frames.back().assertions.push_back(t);
         frames.back().preprocessed_assertions.push_back(preprocessed);
@@ -289,101 +275,103 @@ std::optional<Swine::EvaluatedExponential> Swine::evaluate_exponential(const Ter
     return res;
 }
 
-Term Swine::tangent_lemma(const EvaluatedExponential &e, const bool next) {
-    const auto other_val {pow(e.base_val, next ? e.exponent_val + 1 : e.exponent_val - 1)};
-    const auto diff {abs(e.expected_val - other_val)};
-    const auto [fst_exponent, fst_val] = next
-            ? std::pair(e.exponent_val, e.expected_val)
-            : std::pair(e.exponent_val - 1, other_val);
-    const auto tangent {make_term(
-        Op(Plus),
-        util.term(fst_val),
-        make_term(
-            Op(Mult),
-            util.term(diff),
-            make_term(Op(Minus), e.exponent, util.term(fst_exponent))))};
-    const auto tangent_lemma {make_term(
-        Op(Implies),
-        make_term(Op(Ge), e.exponent, util.term(0)),
-        make_term(Op(Ge), e.exp_expression, tangent))};
-    if (config.log) std::cout << tangent_lemma << std::endl;
-    return tangent_lemma;
-}
-
-void Swine::tangent_lemmas(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas) {
-    if (!e.base->is_value()) {
-        return;
+Swine::Interpolant Swine::interpolate(Term t, const unsigned pos, const cpp_int x1, const cpp_int x2) {
+    Interpolant res;
+    TermVec children;
+    for (const auto &c: t) {
+        children.push_back(c);
     }
-    lemmas.emplace(tangent_lemma(e, true), Tangent);
-    if (e.exponent_val > 1) {
-        lemmas.emplace(tangent_lemma(e, false), Tangent);
-    }
-}
-
-Term Swine::secant_lemma(const EvaluatedExponential &e, const long other_exponent_val) {
-    const auto other_val {pow(e.base_val, other_exponent_val)};
-    const auto factor {other_exponent_val - e.exponent_val};
-    const auto secant {make_term(
+    auto x {children[pos]};
+    children[pos] = util.term(x1);
+    const auto at_x1 {make_term(t->get_op(), children)};
+    children[pos] = util.term(x2);
+    const auto at_x2 {make_term(t->get_op(), children)};
+    res.factor = abs(x2 - x1);
+    res.t = make_term(
         Op(Plus),
         make_term(
             Op(Mult),
-            util.term(other_val - e.expected_val),
-            make_term(Op(Minus), e.exponent, util.term(other_exponent_val))),
-        util.term(other_val * factor))};
-    Term premise;
-    if (other_exponent_val <= e.exponent_val) {
-        premise =
-            make_term(
-                Op(And),
-                make_term(Op(Ge), e.exponent, util.term(other_exponent_val)),
-                make_term(Op(Le), e.exponent, util.term(e.exponent_val)));
-    } else {
-        premise =
-            make_term(
-                Op(And),
-                make_term(Op(Le), e.exponent, util.term(other_exponent_val)),
-                make_term(Op(Ge), e.exponent, util.term(e.exponent_val)));
-    }
-    const auto res {make_term(
-        Op(Implies),
-        premise,
+            util.term(res.factor),
+            at_x1),
         make_term(
-            Op(Le),
-            make_term(Op(Mult), util.term(factor), e.exp_expression),
-            secant))};
-    if (config.log) std::cout << res << std::endl;
+            Op(Mult),
+            make_term(Op(Minus), at_x2, at_x1),
+            make_term(Op(Minus), x, util.term(x1))));
     return res;
 }
 
-void Swine::secant_lemmas(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas) {
-    if (!e.base->is_value()) {
-        return;
-    }
-    // the actual value is too large --> add secant refinement lemmas
-    std::optional<long> prev;
-    std::optional<long> next;
-    // look for the closest existing secant points
-    auto it {secant_points.emplace(e.exp_expression, std::vector<long>()).first};
-    for (const auto &other: it->second) {
-        if (other < e.exponent_val) {
-            if (!prev || other > *prev) {
-                prev = other;
-            }
-        } else if (!next || other < *next) {
-            next = other;
+Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_int, long> a, const std::pair<cpp_int, long> b) {
+    const auto x1 {min(a.first, b.first)};
+    const auto x2 {max(a.first, b.first)};
+    const auto y1 {std::min(a.second, b.second)};
+    const auto y2 {std::max(a.second, b.second)};
+    const auto [base, exp] {util.decompose_exp(t)};
+    const auto op = upper ? Le : Ge;
+    if (base->is_value()) {
+        const auto i {interpolate(t, 2, y1, y2)};
+        auto premise {make_term(Op(Le), util.term(y1), exp, util.term(y2))};
+        if (!upper) {
+            premise = make_term(Op(Not), premise);
         }
+        return make_term(
+            Op(Implies),
+            premise,
+            make_term(
+                Op(op),
+                make_term(Op(Mult), t, util.term(i.factor)),
+                i.t));
+    } else {
+        const auto at_y1 {util.make_exp(base, util.term(y1))};
+        const auto at_y2 {util.make_exp(base, util.term(y2))};
+        const auto i1 {interpolate(at_y1, 1, x1, x2)};
+        const auto i2 {interpolate(at_y1, 1, x1, x2)};
+        const auto gex {make_term(Op(Ge), util.term(x1), base, util.term(x2))};
+        const auto gey {make_term(Op(Ge), util.term(y1), exp, util.term(y2))};
+        Term premise;
+        if (upper) {
+            premise = make_term(Op(And), gex, gey);
+        } else {
+            premise = make_term(
+                Op(And), {
+                 make_term(Op(Ge), base, util.term(0)),
+                 make_term(Op(Not), gex),
+                 make_term(Op(Ge), exp, util.term(0)),
+                 make_term(Op(Not), gey)});
+        }
+        const auto y_diff {util.term(y2 - y1)};
+        const auto conclusion {make_term(
+            Op(op),
+            make_term(Op(Mult), t, util.term(i1.factor), y_diff),
+            make_term(
+                Op(Plus),
+                make_term(Op(Mult), i1.t, y_diff),
+                make_term(
+                    Op(Mult),
+                    make_term(Op(Minus), i2.t, i1.t),
+                    make_term(Op(Minus), exp, util.term(y1)))))};
+        return make_term(Op(Implies), premise, conclusion);
     }
-    // if there are none, use the neighbors
-    if (!prev) {
-        prev = e.exponent_val - 1;
+}
+
+void Swine::interpolation_lemma(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas) {
+    Term lemma;
+    if (e.exp_expression_val < e.expected_val) {
+        lemma = interpolation_lemma(e.exp_expression, false, {e.base_val, e.exponent_val}, {e.base_val + 1, e.exponent_val + 1});
+    } else {
+        std::pair<cpp_int, long> nearest {0, 0};
+        auto min_dist {e.base_val * e.base_val + e.exponent_val * e.exponent_val};
+        const auto &vec {interpolation_points.emplace(e.exp_expression, std::vector<std::pair<cpp_int, long>>()).first->second};
+        for (const auto &[x, y]: vec) {
+            const auto x_dist {x - e.base_val};
+            const auto y_dist {y - e.exponent_val};
+            const auto dist {x_dist * x_dist + y_dist * y_dist};
+            if (dist <= min_dist) {
+                nearest = {x, y};
+            }
+        }
+        lemma = interpolation_lemma(e.exp_expression, true, {e.base_val, e.exponent_val}, nearest);
     }
-    if (!next) {
-        next = e.exponent_val + 1;
-    }
-    // store the current secant point
-    it->second.emplace_back(e.exponent_val);
-    lemmas.emplace(secant_lemma(e, *prev), Secant);
-    lemmas.emplace(secant_lemma(e, *next), Secant);
+    lemmas.emplace(lemma, Interpolation);
 }
 
 std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, const EvaluatedExponential &e2) {
@@ -426,7 +414,7 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
     } else {
         premise = strict_exp_premise;
     }
-    const auto monotonicity_lemma {make_term(
+    return make_term(
         Op(Implies),
         make_term(
             Op(And),
@@ -435,12 +423,7 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
                 util.term(0),
                 smaller.exponent),
             premise),
-        make_term(Op(Lt), smaller.exp_expression, greater.exp_expression))};
-    if (config.log) {
-        std::cout << "monotonicity lemma" << std::endl;
-        std::cout << monotonicity_lemma << std::endl;
-    }
-    return monotonicity_lemma;
+        make_term(Op(Lt), smaller.exp_expression, greater.exp_expression));
 }
 
 void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
@@ -495,15 +478,7 @@ Result Swine::check_sat() {
                         sat &= valid;
                         if (!valid) {
                             bounding_lemmas(e, lemmas);
-                            if (ee->exponent_val >= 0) {
-                                if (ee->exp_expression_val < ee->expected_val) {
-                                    if (config.log) std::cout << "tangent refinement" << std::endl;
-                                    tangent_lemmas(*ee, lemmas);
-                                } else if (ee->exp_expression_val > ee->expected_val) {
-                                    if (config.log) std::cout << "secant refinement" << std::endl;
-                                    secant_lemmas(*ee, lemmas);
-                                }
-                            }
+                            interpolation_lemma(*ee, lemmas);
                         }
                     }
                 }

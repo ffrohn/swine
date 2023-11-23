@@ -11,7 +11,7 @@ using namespace smt;
 using namespace boost::multiprecision;
 
 enum LemmaKind {
-    Symmetry, Bounding, Tangent, Secant, Monotonicity
+    Symmetry, Bounding, Interpolation, Monotonicity
 };
 
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind);
@@ -45,8 +45,7 @@ private:
         uint iterations {0};
         uint symmetry_lemmas {0};
         uint bounding_lemmas {0};
-        uint tangent_lemmas {0};
-        uint secant_lemmas {0};
+        uint interpolation_lemmas {0};
         uint monotonicity_lemmas {0};
         uint num_assertions {0};
         bool non_constant_base {false};
@@ -54,13 +53,18 @@ private:
 
     friend std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats);
 
+    struct Interpolant {
+        Term t;
+        cpp_int factor;
+    };
+
     Statistics stats;
     Util util;
     Preprocessor preproc;
     ExpFinder exp_finder;
     TermEvaluator eval;
     std::vector<Frame> frames;
-    std::unordered_map<Term, std::vector<long>> secant_points;
+    std::unordered_map<Term, std::vector<std::pair<cpp_int, long>>> interpolation_points;
     const Config &config;
 
 public:
@@ -142,10 +146,9 @@ public:
     void compute_bounding_lemmas(const Term e);
     void bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &lemmas);
     std::optional<EvaluatedExponential> evaluate_exponential(const Term exp_expression) const;
-    Term tangent_lemma(const EvaluatedExponential &e, const bool next);
-    void tangent_lemmas(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas);
-    Term secant_lemma(const EvaluatedExponential &e, const long other_exponent_val);
-    void secant_lemmas(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas);
+    Interpolant interpolate(Term t, const unsigned pos, const cpp_int x1, const cpp_int x2);
+    Term interpolation_lemma(Term t, const bool upper, const std::pair<cpp_int, long> a, const std::pair<cpp_int, long> bx2);
+    void interpolation_lemma(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas);
     TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
     std::optional<Term> monotonicity_lemma(const EvaluatedExponential &e1, const EvaluatedExponential &e2);
     void monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
