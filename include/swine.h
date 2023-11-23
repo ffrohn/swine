@@ -6,6 +6,7 @@
 #include "preprocessor.h"
 #include "exp_finder.h"
 #include "config.h"
+#include "term_evaluator.h"
 
 using namespace smt;
 using namespace boost::multiprecision;

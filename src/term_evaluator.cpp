@@ -21,6 +21,6 @@ Term TermEvaluator::evaluate(Term expression) const {
         for (const auto &c: expression) {
             children.push_back(evaluate(c));
         }
-        return util.solver->make_term(expression->get_op(), children);
+        return util.solver->get_value(util.solver->make_term(expression->get_op(), children));
     }
 }

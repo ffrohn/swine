@@ -226,6 +226,10 @@ void Swine::bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &l
 
 void Swine::assert_formula(const Term & t) {
     ++stats.num_assertions;
+    if (config.log) {
+        std::cout << "assertion:" << std::endl;
+        std::cout << t << std::endl;
+    }
     const auto preprocessed {preproc.preprocess(t)};
     if (config.validate) {
         frames.back().assertions.push_back(t);
@@ -233,9 +237,6 @@ void Swine::assert_formula(const Term & t) {
     }
     util.solver->assert_formula(preprocessed);
     const auto exps {exp_finder.find_exps(preprocessed)};
-    for (const auto &e: exps) {
-        std::cout << e << std::endl;
-    }
     if (!exps.empty()) {
         frames.back().exps.insert(exps.begin(), exps.end());
         for (const auto &e: exps) {
@@ -307,12 +308,20 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
     const auto y2 {std::max(a.second, b.second)};
     const auto [base, exp] {util.decompose_exp(t)};
     const auto op = upper ? Le : Ge;
+    const auto gey {make_term(Op(Le), util.term(y1), exp, util.term(y2))};
+    auto ley {make_term(Op(Ge), exp, util.term(0))};
+    if (y2 > y1 + 1) {
+        ley = make_term(
+            Op(And),
+            ley,
+            make_term(
+                Op(Or),
+                make_term(Op(Ge), util.term(y1), exp),
+                make_term(Op(Ge), exp, util.term(y2))));
+    }
     if (base->is_value()) {
         const auto i {interpolate(t, 2, y1, y2)};
-        auto premise {make_term(Op(Le), util.term(y1), exp, util.term(y2))};
-        if (!upper) {
-            premise = make_term(Op(Not), premise);
-        }
+        const auto premise = upper ? gey : ley;
         return make_term(
             Op(Implies),
             premise,
@@ -325,18 +334,22 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
         const auto at_y2 {util.make_exp(base, util.term(y2))};
         const auto i1 {interpolate(at_y1, 1, x1, x2)};
         const auto i2 {interpolate(at_y1, 1, x1, x2)};
-        const auto gex {make_term(Op(Ge), util.term(x1), base, util.term(x2))};
-        const auto gey {make_term(Op(Ge), util.term(y1), exp, util.term(y2))};
         Term premise;
         if (upper) {
+            const auto gex {make_term(Op(Le), util.term(x1), base, util.term(x2))};
             premise = make_term(Op(And), gex, gey);
         } else {
-            premise = make_term(
-                Op(And), {
-                 make_term(Op(Ge), base, util.term(0)),
-                 make_term(Op(Not), gex),
-                 make_term(Op(Ge), exp, util.term(0)),
-                 make_term(Op(Not), gey)});
+            auto lex {make_term(Op(Ge), base, util.term(0))};
+            if (x2 > x1 + 1) {
+                lex = make_term(
+                    Op(And),
+                    lex,
+                    make_term(
+                        Op(Or),
+                        make_term(Op(Ge), util.term(x1), base),
+                        make_term(Op(Ge), base, util.term(x2))));
+            }
+            premise = make_term(Op(And), lex, ley);
         }
         const auto y_diff {util.term(y2 - y1)};
         const auto conclusion {make_term(

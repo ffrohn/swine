@@ -27,19 +27,46 @@ Term Preprocessor::exp_to_pow(Term term) {
 }
 
 Term Preprocessor::preprocess(Term term) {
+    const auto header = [&](){
+        static bool done {false};
+        if (!done) {
+            std::cout << "preprocessing" << std::endl;
+            std::cout << "original term:" << std::endl;
+            std::cout << term << std::endl;
+        }
+        done = true;
+    };
     auto cterm {constant_propagator.propagate(term)};
+    if (util.config.log && cterm != term) {
+        header();
+        std::cout << "constant folding:" << std::endl;
+        std::cout << cterm << std::endl;
+    }
     auto rterm {rewriter.rewrite(cterm)};
+    if (util.config.log && rterm != cterm) {
+        header();
+        std::cout << "rewriting:" << std::endl;
+        std::cout << rterm << std::endl;
+    }
     while (term != cterm && cterm != rterm) {
         term = rterm;
         cterm = constant_propagator.propagate(term);
+        if (util.config.log && cterm != term) {
+            header();
+            std::cout << "constant folding:" << std::endl;
+            std::cout << cterm << std::endl;
+        }
         rterm = term == cterm ? cterm : rewriter.rewrite(cterm);
+        if (util.config.log && rterm != cterm) {
+            header();
+            std::cout << "rewriting:" << std::endl;
+            std::cout << rterm << std::endl;
+        }
     }
     const auto res {exp_to_pow(rterm)};
-    if (util.config.log && res != term) {
-        std::cout << "preprocessing" << std::endl;
-        std::cout << "original term:" << std::endl;
-        std::cout << term << std::endl;
-        std::cout << "new term:" << std::endl;
+    if (util.config.log && res != rterm) {
+        header();
+        std::cout << "exp to pow" << std::endl;
         std::cout << res << std::endl;
     }
     return res;

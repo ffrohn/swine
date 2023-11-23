@@ -64,27 +64,35 @@ Term ConstantPropagator::propagate(Term expression) const {
         bool ground {true};
         for (const auto &c: expression) {
             children.push_back(propagate(c));
-            ground &= c->is_value();
+            ground &= children.back()->is_value();
         }
         const auto op {expression->get_op()};
-        const auto default_res {util.solver->make_term(op, children)};
         switch (op.prim_op) {
         case Plus: {
             TermVec non_ground;
             cpp_int ground {0};
             auto num_ground {0};
-            for (const auto &c: children) {
+            for (auto it = children.begin(); it != children.end();) {
+                const auto c {*it};
                 if (c->is_value()) {
-                    ground += util.value(c);
+                    const auto val {util.value(c)};
+                    if (val == 0) {
+                        it = children.erase(it);
+                        continue;
+                    }
+                    ground += val;
                     ++num_ground;
                 } else {
                     non_ground.push_back(c);
                 }
+                ++it;
             }
-            if (num_ground <= 1) {
-                return default_res;
+            if (children.size() == 1) {
+                return *children.begin();
             } else if (non_ground.empty()) {
                 return util.term(ground);
+            } else if (num_ground <= 1) {
+                return util.solver->make_term(op, children);
             } else {
                 non_ground.push_back(util.term(ground));
                 return util.solver->make_term(op, non_ground);
@@ -94,22 +102,29 @@ Term ConstantPropagator::propagate(Term expression) const {
             TermVec non_ground;
             cpp_int ground {1};
             auto num_ground {0};
-            for (const auto &c: children) {
+            for (auto it = children.begin(); it != children.end();) {
+                const auto c {*it};
                 if (c->is_value()) {
                     const auto val {util.value(c)};
                     if (val == 0) {
                         return util.term(0);
+                    } else if (val == 1) {
+                        it = children.erase(it);
+                        continue;
                     }
                     ground *= val;
                     ++num_ground;
                 } else {
                     non_ground.push_back(c);
                 }
+                ++it;
             }
-            if (num_ground <= 1) {
-                return default_res;
+            if (children.size() == 1) {
+                return *children.begin();
             } else if (non_ground.empty()) {
                 return util.term(ground);
+            } else if (num_ground <= 1) {
+                return util.solver->make_term(op, children);
             } else {
                 non_ground.push_back(util.term(ground));
                 return util.solver->make_term(op, non_ground);
@@ -161,7 +176,7 @@ Term ConstantPropagator::propagate(Term expression) const {
         }
         case Apply: {
             if (util.is_abstract_exp(expression)) {
-                if (ground) {
+                if (children.at(1)->is_value() && children.at(2)->is_value()) {
                     const auto exponent {util.value(children.at(2))};
                     if (exponent >= 0 || util.config.semantics == Total) {
                         return util.term(pow(util.value(children.at(1)), abs(stol(exponent.str()))));
@@ -197,7 +212,7 @@ Term ConstantPropagator::propagate(Term expression) const {
                     new_children.push_back(c);
                 }
             }
-            return util.solver->make_term(And, new_children);
+            return util.solver->make_term(op, new_children);
         }
         case Or: {
             TermVec new_children;
@@ -208,7 +223,7 @@ Term ConstantPropagator::propagate(Term expression) const {
                     new_children.push_back(c);
                 }
             }
-            return util.solver->make_term(And, new_children);
+            return util.solver->make_term(op, new_children);
         }
         case Implies: {
             if (children.size() == 2) {
@@ -224,6 +239,6 @@ Term ConstantPropagator::propagate(Term expression) const {
         }
         default: break;
         }
-        return default_res;
+        return util.solver->make_term(op, children);
     }
 }
