@@ -208,7 +208,7 @@ void Swine::bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &l
         if (map_it != f.bounding_lemmas.end()) {
             auto &set {map_it->second};
             for (auto set_it = set.begin(); set_it != set.end();) {
-                if (util.solver->get_value(*set_it) != util.True) {
+                if (get_value(*set_it) != util.True) {
                     lemmas.emplace(*set_it, Bounding);
                     set_it = set.erase(set_it);
                     return;
@@ -389,12 +389,15 @@ void Swine::interpolation_lemma(const EvaluatedExponential &e, std::unordered_ma
 
 std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, const EvaluatedExponential &e2) {
     if ((e1.base_val > e2.base_val && e1.exponent_val < e2.exponent_val)
-            || (e1.base_val < e2.base_val && e1.exponent_val > e2.exponent_val)
-            || (e1.base_val == e2.base_val && e1.exponent_val == e2.exponent_val)) {
+        || (e1.base_val < e2.base_val && e1.exponent_val > e2.exponent_val)
+        || (e1.base_val == e2.base_val && e1.exponent_val == e2.exponent_val)) {
         return {};
     }
     bool is_smaller = e1.base_val < e2.base_val || e1.exponent_val < e2.exponent_val;
     const auto [smaller, greater] = is_smaller ? std::pair(e1, e2) : std::pair(e2, e1);
+    if (smaller.exp_expression_val < greater.exp_expression_val) {
+        return {};
+    }
     Term premise;
     const Term strict_exp_premise {make_term(
         Op(Lt),
@@ -445,17 +448,17 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     for (const auto &f: frames) {
         for (const auto &[e,_]: f.exps) {
             const auto [base, exp] {util.decompose_exp(e)};
-            if (util.solver->get_value(base) >= 0) {
+            if (util.value(get_value(base)) >= 0 && util.value(get_value(exp)) >= 0) {
                 exps.push_back(e);
             }
         }
     }
     for (auto it1 = exps.begin(); it1 != exps.end(); ++it1) {
         const auto e1 {evaluate_exponential(*it1)};
-        if (e1 && e1->base_val > 1) {
+        if (e1) {
             for (auto it2 = it1; ++it2 != exps.end();) {
                 const auto e2 {evaluate_exponential(*it2)};
-                if (e2 && e2->base_val > 1) {
+                if (e2) {
                     const auto mon_lemma {monotonicity_lemma(*e1, *e2)};
                     if (mon_lemma) {
                         lemmas.emplace(*mon_lemma, Monotonicity);
@@ -508,16 +511,18 @@ Result Swine::check_sat() {
                 }
                 break;
             }
-            for (const auto &f: frames) {
-                for (const auto &[e, _]: f.exps) {
-                    const auto ee {evaluate_exponential(e)};
-                    if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
-                        bounding_lemmas(e, lemmas);
-                    }
-                }
-            }
             if (lemmas.empty()) {
                 monotonicity_lemmas(lemmas);
+            }
+            if (lemmas.empty()) {
+                for (const auto &f: frames) {
+                    for (const auto &[e, _]: f.exps) {
+                        const auto ee {evaluate_exponential(e)};
+                        if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
+                            bounding_lemmas(e, lemmas);
+                        }
+                    }
+                }
             }
             if (lemmas.empty()) {
                 for (const auto &f: frames) {
@@ -583,9 +588,11 @@ UnorderedTermMap Swine::get_model() const {
                 uf = true;
                 std::cerr << "get_model does not support uninterpreted functions at the moment" << std::endl;
             } else {
-                const auto val {get_value(x)};
-                res.emplace(x, val);
+                res.emplace(x, get_value(x));
             }
+        }
+        for (const auto &[x,orig]: f.exps) {
+            res.emplace(x, get_value(x));
         }
     }
     return res;
@@ -827,7 +834,7 @@ void Swine::brute_force() const {
         std::cout << "sat via brute force" << std::endl;
         for (const auto &f: frames) {
             for (const auto &[l, kind]: f.lemmas) {
-                if (util.solver->get_value(l) != util.True) {
+                if (get_value(l) != util.True) {
                     std::cout << "violated " << kind << " lemma" << std::endl;
                     std::cout << l << std::endl;
                 }
