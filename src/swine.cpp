@@ -206,16 +206,15 @@ void Swine::compute_bounding_lemmas(const Term e) {
 }
 
 void Swine::bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &lemmas) {
-    UnorderedTermSet seen;
     for (auto &f: frames) {
         auto map_it {f.bounding_lemmas.find(e)};
         if (map_it != f.bounding_lemmas.end()) {
             auto &set {map_it->second};
             for (auto set_it = set.begin(); set_it != set.end();) {
-                if (util.solver->get_value(*set_it) != util.True && !seen.contains(*set_it)) {
+                if (util.solver->get_value(*set_it) != util.True) {
                     lemmas.emplace(*set_it, Bounding);
-                    seen.insert(*set_it);
                     set_it = set.erase(set_it);
+                    return;
                 } else {
                     ++set_it;
                 }
@@ -491,7 +490,6 @@ Result Swine::check_sat() {
                         sat &= valid;
                         if (!valid) {
                             bounding_lemmas(e, lemmas);
-                            interpolation_lemma(*ee, lemmas);
                         }
                     }
                 }
@@ -502,7 +500,19 @@ Result Swine::check_sat() {
                 }
                 break;
             }
-            monotonicity_lemmas(lemmas);
+            if (lemmas.empty()) {
+                monotonicity_lemmas(lemmas);
+            }
+            if (lemmas.empty()) {
+                for (const auto &f: frames) {
+                    for (const auto &e: f.exps) {
+                        const auto ee {evaluate_exponential(e)};
+                        if (ee && ee->exp_expression_val != ee->expected_val) {
+                            interpolation_lemma(*ee, lemmas);
+                        }
+                    }
+                }
+            }
             for (const auto &[l, kind]: lemmas) {
                 add_lemma(l, kind);
             }
