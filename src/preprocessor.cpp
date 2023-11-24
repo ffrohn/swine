@@ -27,47 +27,64 @@ Term Preprocessor::exp_to_pow(Term term) {
 }
 
 Term Preprocessor::preprocess(Term term) {
-    const auto header = [&](){
+    const auto log = [&](const Term term, const std::string &transformation, const std::function<Term(Term)> &f){
         static bool done {false};
-        if (!done) {
-            std::cout << "preprocessing" << std::endl;
-            std::cout << "original term:" << std::endl;
-            std::cout << term << std::endl;
+        const auto res {f(term)};
+        if (util.config.log && res != term) {
+            if (!done) {
+                std::cout << "preprocessing" << std::endl;
+                std::cout << "original term:" << std::endl;
+                std::cout << term << std::endl;
+                done = true;
+            }
+            std::cout << transformation << ":" << std::endl;
+            std::cout << res << std::endl;
         }
-        done = true;
+        return res;
     };
-    auto cterm {constant_propagator.propagate(term)};
-    if (util.config.log && cterm != term) {
-        header();
-        std::cout << "constant folding:" << std::endl;
-        std::cout << cterm << std::endl;
-    }
-    auto rterm {rewriter.rewrite(cterm)};
-    if (util.config.log && rterm != cterm) {
-        header();
-        std::cout << "rewriting:" << std::endl;
-        std::cout << rterm << std::endl;
-    }
-    while (term != cterm && cterm != rterm) {
-        term = rterm;
-        cterm = constant_propagator.propagate(term);
-        if (util.config.log && cterm != term) {
-            header();
-            std::cout << "constant folding:" << std::endl;
-            std::cout << cterm << std::endl;
+    const auto cp {[&](const Term term) {
+            return constant_propagator.propagate(term);
         }
-        rterm = term == cterm ? cterm : rewriter.rewrite(cterm);
-        if (util.config.log && rterm != cterm) {
-            header();
-            std::cout << "rewriting:" << std::endl;
-            std::cout << rterm << std::endl;
+    };
+    const auto rw {[&](const Term term) {
+            return rewriter.rewrite(term);
         }
-    }
-    const auto res {exp_to_pow(rterm)};
-    if (util.config.log && res != rterm) {
-        header();
-        std::cout << "exp to pow" << std::endl;
-        std::cout << res << std::endl;
+    };
+    const auto ep {[&](const Term term) {
+            return exp_to_pow(term);
+        }
+    };
+    const auto do_cp {[&](const Term term) {
+            return log(term, "constant folding", cp);
+        }
+    };
+    const auto do_rw {[&](const Term term) {
+            return log(term, "rewriting", rw);
+        }
+    };
+    const auto do_ep {[&](const Term term) {
+            return log(term, "exp to pow", ep);
+        }
+    };
+    auto last {term};
+    auto cterm {do_cp(term)};
+    auto eterm {do_ep(cterm)};
+    auto rterm {do_rw(eterm)};
+    auto res {rterm};
+    while (res != last) {
+        last = res;
+        if (res != cterm) {
+            cterm = do_cp(res);
+            res = cterm;
+        }
+        if (res != eterm) {
+            eterm = do_ep(res);
+            res = eterm;
+        }
+        if (res != rterm) {
+            rterm = do_rw(res);
+            res = rterm;
+        }
     }
     return res;
 }

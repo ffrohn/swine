@@ -1,7 +1,7 @@
 #pragma once
 
 enum SolverKind {
-    Z3, CVC5, Yices
+    Z3, CVC5
 };
 
 enum Semantics {

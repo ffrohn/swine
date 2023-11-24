@@ -54,6 +54,7 @@ target_sources(${EXECUTABLE} PRIVATE
 include_directories(${INCLUDE_DIRS})
 
 target_link_libraries(${EXECUTABLE}
-  ${SWITCH}
-  ${SWITCH_CVC5}
-  ${SWITCH_Z3})
+    ${SWITCH}
+    ${SWITCH_CVC5}
+    ${SWITCH_Z3}
+)

@@ -169,14 +169,14 @@ void Swine::compute_bounding_lemmas(const Term e) {
     if (!base->is_value() || util.value(base) == 1) {
         // base = 1 && ... ==> base^exp = 1
         const auto conclusion {make_term(Op(Equal), e, util.term(1))};
-        TermVec premises {make_term(Op(Equal), base, util.term(1))};
+        Term premise {make_term(Op(Equal), base, util.term(1))};
         if (config.semantics == Partial) {
-            premises.push_back(make_term(Op(Ge), exp, util.term(0)));
+            premise = make_term(
+                And,
+                premise,
+                make_term(Op(Ge), exp, util.term(0)));
         }
-        lemma = make_term(
-            Op(Implies),
-            make_term(Op(And), premises),
-            conclusion);
+        lemma = make_term(Op(Implies), premise, conclusion);
         set.push_back(lemma);
     }
     if (!base->is_value() || util.value(base) > 1) {
@@ -704,16 +704,33 @@ Term Swine::make_term(Op op,
 Term Swine::make_term(Op op, const TermVec & terms) const {
     if (op == Op(Exp)) {
         return util.solver->make_term(Op(Apply), util.exp, terms.front(), *(++terms.begin()));
-    } else if (op == Op(Mult) && config.solver_kind == SolverKind::Z3) {
-        auto it {terms.begin()};
-        auto res {*it};
-        while (++it != terms.end()) {
-            res = util.solver->make_term(op, res, *it);
+    } else if (config.solver_kind == SolverKind::Z3 && terms.size() > 2) {
+        switch (op.prim_op) {
+        case Mult: {
+            auto it {terms.begin()};
+            auto res {*it};
+            while (++it != terms.end()) {
+                res = util.solver->make_term(op, res, *it);
+            }
+            return res;
         }
-        return res;
-    } else {
-        return util.solver->make_term(op, terms);
+        case Le:
+        case Lt:
+        case Ge:
+        case Gt: {
+            auto it {terms.begin()};
+            auto last = *it;
+            TermVec args;
+            for (++it; it != terms.end(); ++it) {
+                args.push_back(util.solver->make_term(op, last, *it));
+                last = *it;
+            }
+            return util.solver->make_term(And, args);
+        }
+        default: break;
+        }
     }
+    return util.solver->make_term(op, terms);
 }
 
 void Swine::reset() {
