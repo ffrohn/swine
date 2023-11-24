@@ -6,12 +6,12 @@ class ExpFinder {
 
     Util &util;
 
-    void find_exps(Term term, UnorderedTermSet &res);
+    void find_exps(Term term, std::unordered_map<Term, bool> &res);
 
 public:
 
     ExpFinder(Util &util);
 
-    UnorderedTermSet find_exps(Term term);
+    std::unordered_map<Term, bool> find_exps(Term term);
 
 };

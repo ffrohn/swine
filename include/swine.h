@@ -22,7 +22,7 @@ class Swine: public AbsSmtSolver {
 private:
 
     struct Frame {
-        UnorderedTermSet exps;
+        std::unordered_map<Term, bool> exps;
         UnorderedTermSet symbols;
         TermVec assertions;
         TermVec preprocessed_assertions;

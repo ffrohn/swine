@@ -85,9 +85,6 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
 
 void Swine::add_symmetry_lemmas(const Term e) {
     const auto [base, exp] {util.decompose_exp(e)};
-    if (!base->is_value()) {
-        stats.non_constant_base = true;
-    }
     if (config.semantics == Total) {
         const auto lemma {make_term(
             Op(Equal),
@@ -237,8 +234,12 @@ void Swine::assert_formula(const Term & t) {
     util.solver->assert_formula(preprocessed);
     const auto exps {exp_finder.find_exps(preprocessed)};
     if (!exps.empty()) {
-        frames.back().exps.insert(exps.begin(), exps.end());
-        for (const auto &e: exps) {
+        for (const auto &[e, orig]: exps) {
+            frames.back().exps.emplace(e, orig);
+            const auto [base, exp] {util.decompose_exp(e)};
+            if (!base->is_value()) {
+                stats.non_constant_base = true;
+            }
             add_symmetry_lemmas(e);
             compute_bounding_lemmas(e);
         }
@@ -442,7 +443,12 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     // search for pairs exp(b,e1), exp(b,e2) whose models violate monotonicity of exp
     TermVec exps;
     for (const auto &f: frames) {
-        exps.insert(exps.end(), f.exps.begin(), f.exps.end());
+        for (const auto &[e,_]: f.exps) {
+            const auto [base, exp] {util.decompose_exp(e)};
+            if (util.solver->get_value(base) >= 0) {
+                exps.push_back(e);
+            }
+        }
     }
     for (auto it1 = exps.begin(); it1 != exps.end(); ++it1) {
         const auto e1 {evaluate_exponential(*it1)};
@@ -483,15 +489,17 @@ Result Swine::check_sat() {
             std::unordered_map<Term, LemmaKind> lemmas;
             // check if the model can be lifted, add refinement lemmas otherwise
             for (const auto &f: frames) {
-                for (const auto &e: f.exps) {
-                    const auto ee {evaluate_exponential(e)};
-                    if (ee) {
-                        auto valid {ee->exp_expression_val == ee->expected_val};
-                        sat &= valid;
-                        if (!valid) {
-                            bounding_lemmas(e, lemmas);
+                for (const auto &[e, orig]: f.exps) {
+                    if (orig) {
+                        const auto ee {evaluate_exponential(e)};
+                        if (ee && ee->exp_expression_val != ee->expected_val) {
+                            sat = false;
+                            break;
                         }
                     }
+                }
+                if (!sat) {
+                    break;
                 }
             }
             if (sat) {
@@ -500,14 +508,22 @@ Result Swine::check_sat() {
                 }
                 break;
             }
+            for (const auto &f: frames) {
+                for (const auto &[e, _]: f.exps) {
+                    const auto ee {evaluate_exponential(e)};
+                    if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
+                        bounding_lemmas(e, lemmas);
+                    }
+                }
+            }
             if (lemmas.empty()) {
                 monotonicity_lemmas(lemmas);
             }
             if (lemmas.empty()) {
                 for (const auto &f: frames) {
-                    for (const auto &e: f.exps) {
+                    for (const auto &[e, _]: f.exps) {
                         const auto ee {evaluate_exponential(e)};
-                        if (ee && ee->exp_expression_val != ee->expected_val) {
+                        if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
                             interpolation_lemma(*ee, lemmas);
                         }
                     }
@@ -775,11 +791,13 @@ void Swine::verify() const {
                     std::cout << key << " = " << value << std::endl;
                 }
                 for (const auto &f: frames) {
-                    for (const auto &e: f.exps) {
-                        const auto ee {evaluate_exponential(e)};
-                        if (ee) {
-                            std::cout << ee->exp_expression << ":" << std::endl;
-                            std::cout << ee->base_val << "^" << ee->exponent_val << " = " << ee->exp_expression_val << std::endl;
+                    for (const auto &[e, orig]: f.exps) {
+                        if (orig) {
+                            const auto ee {evaluate_exponential(e)};
+                            if (ee) {
+                                std::cout << ee->exp_expression << ":" << std::endl;
+                                std::cout << ee->base_val << "^" << ee->exponent_val << " = " << ee->exp_expression_val << std::endl;
+                            }
                         }
                     }
                 }
@@ -798,8 +816,10 @@ void Swine::brute_force() const {
     }
     TermVec exps;
     for (const auto &f: frames) {
-        for (const auto &e: f.exps) {
-            exps.push_back(e);
+        for (const auto &[e, orig]: f.exps) {
+            if (orig) {
+                exps.push_back(e);
+            }
         }
     }
     BruteForce bf(util.solver, assertions, exps);
