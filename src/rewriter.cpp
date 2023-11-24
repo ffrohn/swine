@@ -23,6 +23,10 @@ Term Rewriter::rewrite(Term t) {
                     inner_base,
                     util.solver->make_term(Mult, children.at(2), inner_exp));
             }
+        } else if (t->get_op().prim_op == Negate) {
+            if (util.is_app(children.at(0)) && children.at(0)->get_op().prim_op == Negate) {
+                return *children.at(0)->begin();
+            }
         } else if (t->get_op().prim_op == Mult) {
             std::unordered_map<Term, UnorderedTermSet> exp_map;
             TermVec new_children;
