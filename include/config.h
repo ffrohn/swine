@@ -17,6 +17,7 @@ struct Config {
     bool validate {false};
     bool log {false};
     bool statistics {false};
+    bool eager_symmetry_lemmas {false};
     SolverKind solver_kind {SolverKind::CVC5};
     Semantics semantics {Partial};
     std::unordered_set<LemmaKind> active_lemma_kinds {lemma_kind::values};

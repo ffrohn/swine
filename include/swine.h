@@ -141,9 +141,11 @@ public:
                     const UnorderedTermMap & substitution_map) const override;
     void dump_smt2(std::string filename) const override;
 
-    void add_symmetry_lemmas(const Term e);
-    void compute_bounding_lemmas(const Term e);
-    void bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &lemmas);
+    void add_symmetry_lemmas(const ExpGroup &g);
+    void base_symmetry_lemmas(const Term e, TermVec &lemmas);
+    void exp_symmetry_lemmas(const Term e, TermVec &lemmas);
+    void symmetry_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
+    void compute_bounding_lemmas(const ExpGroup &g);
     void bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     std::optional<EvaluatedExponential> evaluate_exponential(const Term exp_expression) const;
     Interpolant interpolate(Term t, const unsigned pos, const cpp_int x1, const cpp_int x2);

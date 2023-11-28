@@ -29,18 +29,6 @@ TermVec ExpGroup::maybe_non_neg_base() const {
     return res;
 }
 
-TermVec ExpGroup::sym() const {
-    // TODO the implementaion below makes more sense, but for some reasons, more (redundant) symmetry lemmas help in some cases...
-    return all();
-    //    TermVec res;
-    //    res.push_back(t);
-    //    if (neg_base || !ground_base) {
-    //        const auto [base, exp] {util.decompose_exp(t)};
-    //        res.push_back(util.make_exp(util.solver->make_term(Negate, base), util.solver->make_term(Negate, exp)));
-    //    }
-    //    return res;
-}
-
 bool ExpGroup::has_ground_base() const {
     return ground_base;
 }

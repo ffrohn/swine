@@ -72,18 +72,39 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
     }
 }
 
-void Swine::add_symmetry_lemmas(const Term e) {
+void Swine::symmetry_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
+    if (!config.is_active(LemmaKind::Symmetry) || config.eager_symmetry_lemmas) {
+        return;
+    }
+    TermVec sym_lemmas;
+    for (const auto &f: frames) {
+        for (const auto &e: f.exps) {
+            const auto ee {evaluate_exponential(e)};
+            if (ee->base_val < 0) {
+                base_symmetry_lemmas(e, sym_lemmas);
+            }
+            if (ee->exponent_val < 0) {
+                exp_symmetry_lemmas(e, sym_lemmas);
+            }
+            if (ee->base_val < 0 && ee->exponent_val < 0) {
+                const auto neg {util.make_exp(util.solver->make_term(Negate, ee->base), util.solver->make_term(Negate, ee->exponent))};
+                base_symmetry_lemmas(neg, sym_lemmas);
+                exp_symmetry_lemmas(neg, sym_lemmas);
+            }
+        }
+    }
+    for (const auto &l: sym_lemmas) {
+        if (util.solver->get_value(l) != util.True) {
+            lemmas.emplace(l, LemmaKind::Symmetry);
+        }
+    }
+}
+
+void Swine::base_symmetry_lemmas(const Term e, TermVec &lemmas) {
     if (!config.is_active(LemmaKind::Symmetry)) {
         return;
     }
     const auto [base, exp] {util.decompose_exp(e)};
-    if (config.semantics == Total) {
-        const auto lemma {make_term(
-            Op(Equal),
-            e,
-            util.make_exp(base, make_term(Op(Negate), exp)))};
-        add_lemma(lemma, LemmaKind::Symmetry);
-    }
     if (!base->is_value() || util.value(base) < 0) {
         const auto conclusion_even {make_term(
             Op(Equal),
@@ -117,98 +138,111 @@ void Swine::add_symmetry_lemmas(const Term e) {
                 premise_odd,
                 make_term(Op(Gt), exp, util.term(0)));
         }
-        add_lemma(make_term(Op(Implies), premise_even, conclusion_even), LemmaKind::Symmetry);
-        add_lemma(make_term(Op(Implies), premise_odd, conclusion_odd), LemmaKind::Symmetry);
+        lemmas.push_back(make_term(Op(Implies), premise_even, conclusion_even));
+        lemmas.push_back(make_term(Op(Implies), premise_odd, conclusion_odd));
     }
 }
 
-void Swine::compute_bounding_lemmas(const Term e) {
+void Swine::exp_symmetry_lemmas(const Term e, TermVec &lemmas) {
+    if (!config.is_active(LemmaKind::Symmetry)) {
+        return;
+    }
+    if (config.semantics == Total) {
+        const auto [base, exp] {util.decompose_exp(e)};
+        const auto lemma {make_term(
+            Op(Equal),
+            e,
+            util.make_exp(base, make_term(Op(Negate), exp)))};
+        lemmas.push_back(lemma);
+    }
+}
+
+void Swine::add_symmetry_lemmas(const ExpGroup &g) {
+    TermVec sym_lemmas;
+    for (const auto &e: g.all()) {
+        base_symmetry_lemmas(e, sym_lemmas);
+        exp_symmetry_lemmas(e, sym_lemmas);
+    }
+    for (const auto &l: sym_lemmas) {
+        add_lemma(l, LemmaKind::Symmetry);
+    }
+}
+
+void Swine::compute_bounding_lemmas(const ExpGroup &g) {
     if (!config.is_active(LemmaKind::Bounding)) {
         return;
     }
-    auto [it, inserted] {frames.back().bounding_lemmas.emplace(e, TermVec())};
-    if (!inserted) {
-        return;
-    }
-    auto &set {it->second};
-    const auto [base, exp] {util.decompose_exp(e)};
-    Term lemma;
-    // exp = 0 ==> base^exp = 1
-    lemma = make_term(
-        Op(Implies),
-        make_term(Op(Equal), exp, util.term(0)),
-        make_term(Op(Equal), e, util.term(1)));
-    set.push_back(lemma);
-    // exp = 1 ==> base^exp = base
-    lemma = make_term(
-        Op(Implies),
-        make_term(Op(Equal), exp, util.term(1)),
-        make_term(Op(Equal), e, base));
-    set.push_back(lemma);
-    if (!base->is_value() || util.value(base) == 0) {
-        // base = 0 && ... ==> base^exp = 0
-        const auto conclusion {make_term(Op(Equal), e, util.term(0))};
-        TermVec premises {make_term(Op(Equal), base, util.term(0))};
-        if (config.semantics == Total) {
-            premises.push_back(make_term(Op(Distinct), base, util.term(0)));
-        } else {
-            premises.push_back(make_term(Op(Gt), exp, util.term(0)));
+    for (const auto &e: g.maybe_non_neg_base()) {
+        auto [it, inserted] {frames.back().bounding_lemmas.emplace(e, TermVec())};
+        if (!inserted) {
+            return;
         }
+        auto &set {it->second};
+        const auto [base, exp] {util.decompose_exp(e)};
+        Term lemma;
+        // exp = 0 ==> base^exp = 1
         lemma = make_term(
             Op(Implies),
-            make_term(Op(And), premises),
-            conclusion);
+            make_term(Op(Equal), exp, util.term(0)),
+            make_term(Op(Equal), e, util.term(1)));
         set.push_back(lemma);
-    }
-    if (!base->is_value() || util.value(base) == 1) {
-        // base = 1 && ... ==> base^exp = 1
-        const auto conclusion {make_term(Op(Equal), e, util.term(1))};
-        Term premise {make_term(Op(Equal), base, util.term(1))};
-        if (config.semantics == Partial) {
-            premise = make_term(
-                And,
-                premise,
-                make_term(Op(Ge), exp, util.term(0)));
-        }
-        lemma = make_term(Op(Implies), premise, conclusion);
-        set.push_back(lemma);
-    }
-    if (!base->is_value() || util.value(base) > 1) {
-        // exp + base > 4 && s > 1 && t > 1 ==> base^exp > s * t + 1
+        // exp = 1 ==> base^exp = base
         lemma = make_term(
             Op(Implies),
-            make_term(
-                Op(And),
+            make_term(Op(Equal), exp, util.term(1)),
+            make_term(Op(Equal), e, base));
+        set.push_back(lemma);
+        if (!base->is_value() || util.value(base) == 0) {
+            // base = 0 && ... ==> base^exp = 0
+            const auto conclusion {make_term(Op(Equal), e, util.term(0))};
+            TermVec premises {make_term(Op(Equal), base, util.term(0))};
+            if (config.semantics == Total) {
+                premises.push_back(make_term(Op(Distinct), base, util.term(0)));
+            } else {
+                premises.push_back(make_term(Op(Gt), exp, util.term(0)));
+            }
+            lemma = make_term(
+                Op(Implies),
+                make_term(Op(And), premises),
+                conclusion);
+            set.push_back(lemma);
+        }
+        if (!base->is_value() || util.value(base) == 1) {
+            // base = 1 && ... ==> base^exp = 1
+            const auto conclusion {make_term(Op(Equal), e, util.term(1))};
+            Term premise {make_term(Op(Equal), base, util.term(1))};
+            if (config.semantics == Partial) {
+                premise = make_term(
+                    And,
+                    premise,
+                    make_term(Op(Ge), exp, util.term(0)));
+            }
+            lemma = make_term(Op(Implies), premise, conclusion);
+            set.push_back(lemma);
+        }
+        if (!base->is_value() || util.value(base) > 1) {
+            // exp + base > 4 && s > 1 && t > 1 ==> base^exp > s * t + 1
+            lemma = make_term(
+                Op(Implies),
+                make_term(
+                    Op(And),
+                    make_term(
+                        Op(Gt),
+                        make_term(Op(Plus), base, exp),
+                        util.term(4)),
+                    make_term(Op(Gt), base, util.term(1)),
+                    make_term(Op(Gt), exp, util.term(1))),
                 make_term(
                     Op(Gt),
-                    make_term(Op(Plus), base, exp),
-                    util.term(4)),
-                make_term(Op(Gt), base, util.term(1)),
-                make_term(Op(Gt), exp, util.term(1))),
-            make_term(
-                Op(Gt),
-                e,
-                make_term(
-                    Op(Plus),
+                    e,
                     make_term(
-                        Op(Mult),
-                        base,
-                        exp),
-                    util.term(1))));
-        set.push_back(lemma);
-    }
-}
-
-void Swine::bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &lemmas) {
-    for (auto &f: frames) {
-        auto map_it {f.bounding_lemmas.find(e)};
-        if (map_it != f.bounding_lemmas.end()) {
-            for (const auto &l: map_it->second) {
-                if (get_value(l) != util.True) {
-                    lemmas.emplace(l, LemmaKind::Bounding);
-                    return;
-                }
-            }
+                        Op(Plus),
+                        make_term(
+                            Op(Mult),
+                            base,
+                            exp),
+                        util.term(1))));
+            set.push_back(lemma);
         }
     }
 }
@@ -217,12 +251,22 @@ void Swine::bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     if (!config.is_active(LemmaKind::Bounding)) {
         return;
     }
+    UnorderedTermSet seen;
     for (const auto &f: frames) {
         for (const auto &g: f.exp_groups) {
+            if (seen.contains(g.orig())) {
+                continue;
+            }
+            seen.emplace(g.orig());
             for (const auto &e: g.maybe_non_neg_base()) {
                 const auto ee {evaluate_exponential(e)};
                 if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
-                    bounding_lemmas(e, lemmas);
+                    for (const auto &l: f.bounding_lemmas.at(e)) {
+                        if (get_value(l) != util.True) {
+                            lemmas.emplace(l, LemmaKind::Bounding);
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -245,12 +289,10 @@ void Swine::assert_formula(const Term & t) {
         if (frames.back().exps.insert(g.orig()).second) {
             frames.back().exp_groups.push_back(g);
             stats.non_constant_base |= !g.has_ground_base();
-            for (const auto &e: g.sym()) {
-                add_symmetry_lemmas(e);
+            if (config.eager_symmetry_lemmas) {
+                add_symmetry_lemmas(g);
             }
-            for (const auto &e: g.maybe_non_neg_base()) {
-                compute_bounding_lemmas(e);
-            }
+            compute_bounding_lemmas(g);
         }
     }
 }
@@ -572,6 +614,9 @@ Result Swine::check_sat() {
                 break;
             }
             if (lemmas.empty()) {
+                symmetry_lemmas(lemmas);
+            }
+            if (lemmas.empty()) {
                 monotonicity_lemmas(lemmas);
             }
             if (lemmas.empty()) {
@@ -647,8 +692,10 @@ UnorderedTermMap Swine::get_model() const {
                 res.emplace(x, get_value(x));
             }
         }
-        for (const auto &e: f.exps) {
-            res.emplace(e, get_value(e));
+        for (const auto &g: f.exp_groups) {
+            for (const auto &e: g.all()) {
+                res.emplace(e, get_value(e));
+            }
         }
     }
     return res;

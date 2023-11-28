@@ -16,7 +16,6 @@ public:
 
     TermVec all() const;
     TermVec maybe_non_neg_base() const;
-    TermVec sym() const;
     bool has_ground_base() const;
     Term orig() const;
 

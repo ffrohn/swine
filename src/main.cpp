@@ -51,6 +51,8 @@ int main(int argc, char *argv[]) {
             return 0;
         } else if (boost::iequals(argv[arg], "--no-version")) {
             show_version = false;
+        } else if (boost::iequals(argv[arg], "--eager-symmetry-lemmas")) {
+            config.eager_symmetry_lemmas = true;
         } else if (boost::iequals(argv[arg], "--semantics")) {
             const std::string str {get_next()};
             if (boost::iequals(str, "total")) {
