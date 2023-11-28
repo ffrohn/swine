@@ -368,22 +368,25 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
 
 void Swine::interpolation_lemma(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas) {
     Term lemma;
+    auto &vec {interpolation_points.emplace(e.exp_expression, std::vector<std::pair<cpp_int, long>>()).first->second};
     if (e.exp_expression_val < e.expected_val) {
-        lemma = interpolation_lemma(e.exp_expression, false, {e.base_val, e.exponent_val}, {e.base_val + 1, e.exponent_val + 1});
+        const auto min_base = e.base_val > 0 ? e.base_val - 1 : e.base_val;
+        const auto min_exp = e.exponent_val > 0 ? e.exponent_val - 1 : e.exponent_val;
+        lemma = interpolation_lemma(e.exp_expression, false, {min_base, min_exp}, {min_base + 1, min_exp + 1});
     } else {
         std::pair<cpp_int, long> nearest {0, 0};
         auto min_dist {e.base_val * e.base_val + e.exponent_val * e.exponent_val};
-        const auto &vec {interpolation_points.emplace(e.exp_expression, std::vector<std::pair<cpp_int, long>>()).first->second};
         for (const auto &[x, y]: vec) {
             const auto x_dist {x - e.base_val};
             const auto y_dist {y - e.exponent_val};
             const auto dist {x_dist * x_dist + y_dist * y_dist};
-            if (dist <= min_dist) {
+            if (0 < dist && dist <= min_dist) {
                 nearest = {x, y};
             }
         }
         lemma = interpolation_lemma(e.exp_expression, true, {e.base_val, e.exponent_val}, nearest);
     }
+    vec.emplace_back(e.base_val, e.exponent_val);
     lemmas.emplace(lemma, Interpolation);
 }
 
