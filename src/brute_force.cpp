@@ -3,8 +3,8 @@
 #include <smt-switch/cvc5_factory.h>
 #include <smt-switch/solver.h>
 
-BruteForce::BruteForce(SmtSolver solver, const smt::TermVec &assertions, const smt::TermVec &exps): solver(solver), assertions(assertions), exps(exps) {
-    solver->reset_assertions();
+BruteForce::BruteForce(Util &util, const smt::TermVec &assertions, const smt::TermVec &exps): util(util), assertions(assertions), exps(exps) {
+    util.solver->reset_assertions();
 }
 
 bool BruteForce::next(const ulong weight, std::vector<std::pair<Term, ulong>>::iterator begin) {
@@ -42,37 +42,44 @@ bool BruteForce::next() {
 
 bool BruteForce::check_sat() {
     for (const auto &a: assertions) {
-        solver->assert_formula(a);
+        util.solver->assert_formula(a);
     }
     for (const auto &e: exps) {
         current.emplace_back(e, 0);
     }
-    const auto int_sort {solver->make_sort(SortKind::INT)};
+    const auto int_sort {util.solver->make_sort(SortKind::INT)};
     do {
-        solver->push();
+        if (util.config.log) {
+            std::cout << "brute force:";
+            for (const auto &c: current) {
+                std::cout << " " << c.first << "=" << c.second;
+            }
+            std::cout << std::endl;
+        }
+        util.solver->push();
         for (const auto &[exp, val]: current) {
             auto it {exp->begin()};
             const auto base {*(++it)};
             const auto exponent {*(++it)};
-            const auto exp_eq {solver->make_term(
+            const auto exp_eq {util.solver->make_term(
                 Op(Equal),
                 exponent,
-                solver->make_term(val, int_sort))};
-            solver->assert_formula(exp_eq);
-            const auto res_eq {solver->make_term(
+                util.solver->make_term(val, int_sort))};
+            util.solver->assert_formula(exp_eq);
+            const auto res_eq {util.solver->make_term(
                 Op(Equal),
                 exp,
-                solver->make_term(
+                util.solver->make_term(
                     Op(Pow),
                     base,
-                    solver->make_term(val, int_sort)))};
-            solver->assert_formula(res_eq);
+                    util.solver->make_term(val, int_sort)))};
+            util.solver->assert_formula(res_eq);
         }
-        const auto res {solver->check_sat()};
+        const auto res {util.solver->check_sat()};
         if (res.is_sat()) {
             return true;
         }
-        solver->pop();
+        util.solver->pop();
     } while (next());
     return false;
 }

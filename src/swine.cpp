@@ -820,7 +820,7 @@ void Swine::brute_force() const {
             exps.push_back(e);
         }
     }
-    BruteForce bf(util.solver, assertions, exps);
+    BruteForce bf(util, assertions, exps);
     if (bf.check_sat()) {
         std::cout << "sat via brute force" << std::endl;
         for (const auto &f: frames) {

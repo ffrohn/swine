@@ -1,12 +1,14 @@
 #pragma once
 
+#include "util.h"
+
 #include <smt-switch/term.h>
 #include <map>
 
 using namespace smt;
 
 class BruteForce {
-    SmtSolver solver;
+    Util &util;
     TermVec assertions;
     TermVec exps;
     ulong bound {0};
@@ -19,7 +21,7 @@ class BruteForce {
 
 public:
 
-    BruteForce(SmtSolver solver, const TermVec &assertions, const TermVec &exps);
+    BruteForce(Util &util, const TermVec &assertions, const TermVec &exps);
     bool check_sat();
 
 };
