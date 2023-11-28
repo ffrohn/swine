@@ -71,8 +71,9 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
         std::cout << kind << " lemma:" << std::endl;
         std::cout << t << std::endl;
     }
-    util.solver->assert_formula(preproc.preprocess(t));
-    if (config.validate) frames.back().lemmas.emplace(t, kind);
+    const auto pp {preproc.preprocess(t)};
+    util.solver->assert_formula(pp);
+    if (config.validate) frames.back().lemmas.emplace(pp, kind);
     switch (kind) {
     case Interpolation: ++stats.interpolation_lemmas;
         break;
