@@ -1,0 +1,4 @@
+#include "version.h"
+
+const std::string Version::GIT_SHA = "@SHA@";
+const std::string Version::GIT_DIRTY = "@DIRTY@";

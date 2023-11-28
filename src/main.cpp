@@ -1,9 +1,14 @@
 #include "swine.h"
+#include "version.h"
 
 #include <smt-switch/cvc5_factory.h>
 #include <smt-switch/z3_factory.h>
 #include <smt-switch/smtlib_reader.h>
 #include <boost/algorithm/string.hpp>
+
+void version() {
+    std::cout << "Build SHA: " << Version::GIT_SHA << " (" << Version::GIT_DIRTY << ")" << endl;
+}
 
 int main(int argc, char *argv[]) {
     int arg = 0;
@@ -36,6 +41,9 @@ int main(int argc, char *argv[]) {
             config.log = true;
         } else if (boost::iequals(argv[arg], "--stats")) {
             config.statistics = true;
+        } else if (boost::iequals(argv[arg], "--version")) {
+            version();
+            return 0;
         } else if (boost::iequals(argv[arg], "--semantics")) {
             const std::string str {get_next()};
             if (boost::iequals(str, "total")) {
@@ -58,5 +66,7 @@ int main(int argc, char *argv[]) {
         throw std::invalid_argument("missing input file");
     }
     SmtSolver swine {std::make_shared<Swine>(solver, config)};
-    return SmtLibReader(swine).parse(*input);
+    const auto res {SmtLibReader(swine).parse(*input)};
+    version();
+    return res;
 }

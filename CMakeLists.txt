@@ -13,6 +13,11 @@ add_compile_options(-Wall -Wextra -pedantic -Wno-unused-parameter)
 
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+include(GetGitRevisionDescription)
+get_git_head_revision(GIT_REFSPEC SHA)
+git_local_changes(DIRTY)
+
 message(STATUS "Build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})
 message(STATUS "Compiler cxx debug flags:" ${CMAKE_CXX_FLAGS_DEBUG})
@@ -49,6 +54,8 @@ target_sources(${EXECUTABLE} PRIVATE
     "${PROJECT_SOURCE_DIR}/src/util.cpp"
     "${PROJECT_SOURCE_DIR}/include/config.h"
     "${PROJECT_SOURCE_DIR}/src/main.cpp"
+    "${PROJECT_SOURCE_DIR}/include/version.h"
+    "${PROJECT_SOURCE_DIR}/src/version.cpp"
 )
 
 include_directories(${INCLUDE_DIRS})
