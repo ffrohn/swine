@@ -92,40 +92,42 @@ void Swine::add_symmetry_lemmas(const Term e) {
             util.make_exp(base, make_term(Op(Negate), exp)))};
         add_lemma(lemma, Symmetry);
     }
-    const auto conclusion_even {make_term(
-        Op(Equal),
-        e,
-        util.make_exp(
-            make_term(Op(Negate), base),
-            exp))};
-    const auto conclusion_odd {make_term(
-        Op(Equal),
-        e,
-        make_term(
-            Op(Negate),
+    if (!base->is_value() || util.value(base) < 0) {
+        const auto conclusion_even {make_term(
+            Op(Equal),
+            e,
             util.make_exp(
                 make_term(Op(Negate), base),
-                exp)))};
-    auto premise_even {make_term(
-        Op(Equal),
-        make_term(Op(Mod), exp, util.term(2)),
-        util.term(0))};
-    auto premise_odd {make_term(
-        Op(Equal),
-        make_term(Op(Mod), exp, util.term(2)),
-        util.term(1))};
-    if (config.semantics == Partial) {
-        premise_even = make_term(
-            Op(And),
-            premise_even,
-            make_term(Op(Ge), exp, util.term(0)));
-        premise_odd = make_term(
-            Op(And),
-            premise_odd,
-            make_term(Op(Gt), exp, util.term(0)));
+                exp))};
+        const auto conclusion_odd {make_term(
+            Op(Equal),
+            e,
+            make_term(
+                Op(Negate),
+                util.make_exp(
+                    make_term(Op(Negate), base),
+                    exp)))};
+        auto premise_even {make_term(
+            Op(Equal),
+            make_term(Op(Mod), exp, util.term(2)),
+            util.term(0))};
+        auto premise_odd {make_term(
+            Op(Equal),
+            make_term(Op(Mod), exp, util.term(2)),
+            util.term(1))};
+        if (config.semantics == Partial) {
+            premise_even = make_term(
+                Op(And),
+                premise_even,
+                make_term(Op(Ge), exp, util.term(0)));
+            premise_odd = make_term(
+                Op(And),
+                premise_odd,
+                make_term(Op(Gt), exp, util.term(0)));
+        }
+        add_lemma(make_term(Op(Implies), premise_even, conclusion_even), Symmetry);
+        add_lemma(make_term(Op(Implies), premise_odd, conclusion_odd), Symmetry);
     }
-    add_lemma(make_term(Op(Implies), premise_even, conclusion_even), Symmetry);
-    add_lemma(make_term(Op(Implies), premise_odd, conclusion_odd), Symmetry);
 }
 
 void Swine::compute_bounding_lemmas(const Term e) {
