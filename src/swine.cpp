@@ -486,11 +486,22 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     for (auto f: frames) {
         for (auto e: f.exps) {
             const auto ee {evaluate_exponential(e)};
-            if (ee->base->is_value() && ee->exp_expression_val % abs(ee->base_val) != 0) {
-                const auto l {make_term(
+            if (ee->base->is_value() && ee->exponent_val > 0 && ee->exp_expression_val % abs(ee->base_val) != 0) {
+                auto l {make_term(
                     Equal,
                     util.term(0),
                     make_term(Mod, ee->exp_expression, ee->base))};
+                if (config.semantics == Partial) {
+                    l = make_term(
+                        Implies,
+                        make_term(Gt, ee->exponent, util.term(0)),
+                        l);
+                } else {
+                    l = make_term(
+                        Implies,
+                        make_term(Distinct, ee->exponent, util.term(0)),
+                        l);
+                }
                 lemmas.emplace(l, Modulo);
             }
         }
