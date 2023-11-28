@@ -10,6 +10,10 @@ void version() {
     std::cout << "Build SHA: " << Version::GIT_SHA << " (" << Version::GIT_DIRTY << ")" << std::endl;
 }
 
+void argument_parsing_failed(const std::string &str) {
+    throw std::invalid_argument("extra argument " + str);
+}
+
 int main(int argc, char *argv[]) {
     int arg = 0;
     auto get_next = [&]() {
@@ -54,15 +58,30 @@ int main(int argc, char *argv[]) {
                 throw std::invalid_argument("unknown semantics " + str);
             }
         } else if (boost::istarts_with(argv[arg], "--no-")) {
+            auto found {false};
             for (const auto k: lemma_kind::values) {
                 if (boost::iequals(argv[arg], "--no-" + lemma_kind::str(k))) {
                     config.deactivate(k);
+                    found = true;
+                    break;
                 }
+            }
+            if (!found) {
+                for (const auto k: preproc_kind::values) {
+                    if (boost::iequals(argv[arg], "--no-" + preproc_kind::str(k))) {
+                        config.deactivate(k);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found) {
+                argument_parsing_failed(argv[arg]);
             }
         } else if (!input) {
             input = argv[arg];
         } else {
-            throw std::invalid_argument("extra argument " + std::string(argv[arg]));
+            argument_parsing_failed(argv[arg]);
         }
     }
     if (!solver) {

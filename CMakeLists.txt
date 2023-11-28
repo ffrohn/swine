@@ -57,6 +57,8 @@ target_sources(${EXECUTABLE} PRIVATE
     "${PROJECT_SOURCE_DIR}/src/util.cpp"
     "${PROJECT_SOURCE_DIR}/include/lemma_kind.h"
     "${PROJECT_SOURCE_DIR}/src/lemma_kind.cpp"
+    "${PROJECT_SOURCE_DIR}/include/preproc_kind.h"
+    "${PROJECT_SOURCE_DIR}/src/preproc_kind.cpp"
     "${PROJECT_SOURCE_DIR}/include/config.h"
     "${PROJECT_SOURCE_DIR}/src/main.cpp"
     "${PROJECT_SOURCE_DIR}/include/version.h"

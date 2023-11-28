@@ -15,6 +15,4 @@ public:
 
     Term preprocess(Term term);
 
-    Term exp_to_pow(Term term);
-
 };

@@ -15,6 +15,14 @@ Term Rewriter::rewrite(Term t) {
         }
         if (util.is_abstract_exp(t)) {
             const auto base {children.at(1)};
+            const auto exp {children.at(2)};
+            if ((base == util.term(1) && util.config.semantics == Total) || exp == util.term(0)) {
+                return util.term(1);
+            } else if (exp == util.term(1) || (exp == util.term(-1) && util.config.semantics == Total)) {
+                return base;
+            } else if (exp->is_value() && (util.value(exp) >= 0 || util.config.semantics == Total)) {
+                return util.solver->make_term(Pow, base, util.term(abs(util.value(exp))));
+            }
             if (util.is_abstract_exp(base)) {
                 const auto [inner_base, inner_exp] {util.decompose_exp(base)};
                 return util.solver->make_term(
