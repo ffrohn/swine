@@ -851,6 +851,12 @@ void Swine::brute_force() {
     BruteForce bf(util, assertions, exps);
     if (bf.check_sat()) {
         std::cout << "sat via brute force" << std::endl;
+        if (config.log) {
+            std::cout << "candidate model:" << std::endl;
+            for (const auto &[key,val]: get_model()) {
+                std::cout << key << " = " << val << std::endl;
+            }
+        }
         for (const auto &f: frames) {
             for (const auto &[l, kind]: f.lemmas) {
                 if (get_value(l) != util.True) {
