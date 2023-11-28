@@ -7,7 +7,7 @@
 #include <boost/algorithm/string.hpp>
 
 void version() {
-    std::cout << "Build SHA: " << Version::GIT_SHA << " (" << Version::GIT_DIRTY << ")" << endl;
+    std::cout << "Build SHA: " << Version::GIT_SHA << " (" << Version::GIT_DIRTY << ")" << std::endl;
 }
 
 int main(int argc, char *argv[]) {

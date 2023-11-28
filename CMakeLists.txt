@@ -18,6 +18,9 @@ include(GetGitRevisionDescription)
 get_git_head_revision(GIT_REFSPEC SHA)
 git_local_changes(DIRTY)
 
+# generate version.cc
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp.in" "${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp" @ONLY)
+
 message(STATUS "Build type: " ${CMAKE_BUILD_TYPE})
 message(STATUS "Compiler flags:" ${CMAKE_CXX_COMPILE_FLAGS})
 message(STATUS "Compiler cxx debug flags:" ${CMAKE_CXX_FLAGS_DEBUG})

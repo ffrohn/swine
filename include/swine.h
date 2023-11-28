@@ -157,7 +157,7 @@ public:
     void monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     void mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     void verify() const;
-    void brute_force() const;
+    void brute_force();
     void add_lemma(const Term lemma, const LemmaKind kind);
 
 };

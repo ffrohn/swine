@@ -835,7 +835,7 @@ void Swine::verify() const {
     }
 }
 
-void Swine::brute_force() const {
+void Swine::brute_force() {
     TermVec assertions;
     for (const auto &f: frames) {
         for (const auto &a: f.preprocessed_assertions) {
