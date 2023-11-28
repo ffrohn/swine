@@ -212,7 +212,13 @@ Term ConstantPropagator::propagate(Term expression) const {
                     new_children.push_back(c);
                 }
             }
-            return util.solver->make_term(op, new_children);
+            if (new_children.empty()) {
+                return util.True;
+            } else if (new_children.size() == 1) {
+                return new_children.front();
+            } else {
+                return util.solver->make_term(op, new_children);
+            }
         }
         case Or: {
             TermVec new_children;
@@ -223,7 +229,14 @@ Term ConstantPropagator::propagate(Term expression) const {
                     new_children.push_back(c);
                 }
             }
-            return util.solver->make_term(op, new_children);
+            if (new_children.empty()) {
+                return util.False;
+            } else if (new_children.size() == 1) {
+                return new_children.front();
+            } else {
+                return util.solver->make_term(op, new_children);
+            }
+
         }
         case Implies: {
             if (children.size() == 2) {
