@@ -27,6 +27,7 @@ int main(int argc, char *argv[]) {
     SmtSolver solver;
     Config config;
     std::optional<std::string> input;
+    auto show_version {true};
     while (++arg < argc) {
         if (boost::iequals(argv[arg], "--solver")) {
             const std::string str {get_next()};
@@ -48,6 +49,8 @@ int main(int argc, char *argv[]) {
         } else if (boost::iequals(argv[arg], "--version")) {
             version();
             return 0;
+        } else if (boost::iequals(argv[arg], "--no-version")) {
+            show_version = false;
         } else if (boost::iequals(argv[arg], "--semantics")) {
             const std::string str {get_next()};
             if (boost::iequals(str, "total")) {
@@ -92,6 +95,8 @@ int main(int argc, char *argv[]) {
     }
     SmtSolver swine {std::make_shared<Swine>(solver, config)};
     const auto res {SmtLibReader(swine).parse(*input)};
-    version();
+    if (show_version) {
+        version();
+    }
     return res;
 }
