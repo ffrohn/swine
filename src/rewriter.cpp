@@ -60,6 +60,13 @@ Term Rewriter::rewrite(Term t) {
             if (changed) {
                 return util.solver->make_term(Mult, new_children);
             }
+        } else if (t->get_op().prim_op == Pow) {
+            const auto fst {rewrite(*t->begin())};
+            const auto snd {rewrite(*std::next(t->begin()))};
+            if (util.is_abstract_exp(fst) && snd->is_value() && util.value(snd) >= 0) {
+                const auto [base, exp] {util.decompose_exp(fst)};
+                return util.make_exp(base, util.solver->make_term(Mult, exp, snd));
+            }
         }
         return util.solver->make_term(t->get_op(), children);
     }
