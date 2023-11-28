@@ -8,6 +8,8 @@ std::ostream& operator<<(std::ostream &s, const LemmaKind kind) {
     switch (kind) {
     case Symmetry: s << "symmetry";
         break;
+    case Modulo: s << "modulo";
+        break;
     case Bounding: s << "bounding";
         break;
     case Interpolation: s << "interpolation";
@@ -37,6 +39,7 @@ std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats) {
     s << "assertions:           " << stats.num_assertions << std::endl;
     s << "iterations:           " << stats.iterations << std::endl;
     s << "symmetry lemmas:      " << stats.symmetry_lemmas << std::endl;
+    s << "modulo lemmas:        " << stats.modulo_lemmas << std::endl;
     s << "bounding lemmas:      " << stats.bounding_lemmas << std::endl;
     s << "interpolation lemmas: " << stats.interpolation_lemmas << std::endl;
     s << "monotonicity lemmas:  " << stats.monotonicity_lemmas << std::endl;
@@ -74,6 +77,8 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
     case Interpolation: ++stats.interpolation_lemmas;
         break;
     case Symmetry: ++stats.symmetry_lemmas;
+        break;
+    case Modulo: ++stats.modulo_lemmas;
         break;
     case Bounding: ++stats.bounding_lemmas;
         break;
@@ -476,6 +481,21 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     }
 }
 
+void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
+    for (auto f: frames) {
+        for (auto e: f.exps) {
+            const auto ee {evaluate_exponential(e)};
+            if (ee->base->is_value() && ee->exp_expression_val % abs(ee->base_val) != 0) {
+                const auto l {make_term(
+                    Equal,
+                    util.term(0),
+                    make_term(Mod, ee->exp_expression, ee->base))};
+                lemmas.emplace(l, Modulo);
+            }
+        }
+    }
+}
+
 Result Swine::check_sat() {
     Result res;
     while (true) {
@@ -530,6 +550,9 @@ Result Swine::check_sat() {
                         }
                     }
                 }
+            }
+            if (lemmas.empty()) {
+                mod_lemmas(lemmas);
             }
             if (lemmas.empty()) {
                 for (const auto &f: frames) {

@@ -12,7 +12,7 @@ using namespace smt;
 using namespace boost::multiprecision;
 
 enum LemmaKind {
-    Symmetry, Bounding, Interpolation, Monotonicity
+    Symmetry, Bounding, Interpolation, Monotonicity, Modulo
 };
 
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind);
@@ -47,6 +47,7 @@ private:
         uint iterations {0};
         uint symmetry_lemmas {0};
         uint bounding_lemmas {0};
+        uint modulo_lemmas {0};
         uint interpolation_lemmas {0};
         uint monotonicity_lemmas {0};
         uint num_assertions {0};
@@ -154,6 +155,7 @@ public:
     TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
     std::optional<Term> monotonicity_lemma(const EvaluatedExponential &e1, const EvaluatedExponential &e2);
     void monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
+    void mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     void verify() const;
     void brute_force() const;
     void add_lemma(const Term lemma, const LemmaKind kind);
