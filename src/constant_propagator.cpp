@@ -178,7 +178,7 @@ Term ConstantPropagator::propagate(Term expression) const {
             if (util.is_abstract_exp(expression)) {
                 if (children.at(1)->is_value() && children.at(2)->is_value()) {
                     const auto exponent {util.value(children.at(2))};
-                    if (exponent >= 0 || util.config.semantics == Total) {
+                    if (exponent >= 0 || util.config.semantics == Semantics::Total) {
                         return util.term(pow(util.value(children.at(1)), abs(stol(exponent.str()))));
                     }
                 }

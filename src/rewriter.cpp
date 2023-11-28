@@ -3,7 +3,7 @@
 Rewriter::Rewriter(Util &util): util(util) {}
 
 Term Rewriter::rewrite(Term t) {
-    if (util.config.semantics == Partial) {
+    if (util.config.semantics == Semantics::Partial) {
         return t;
     }
     if (!util.is_app(t)) {
@@ -16,11 +16,11 @@ Term Rewriter::rewrite(Term t) {
         if (util.is_abstract_exp(t)) {
             const auto base {children.at(1)};
             const auto exp {children.at(2)};
-            if ((base == util.term(1) && util.config.semantics == Total) || exp == util.term(0)) {
+            if ((base == util.term(1) && util.config.semantics == Semantics::Total) || exp == util.term(0)) {
                 return util.term(1);
-            } else if (exp == util.term(1) || (exp == util.term(-1) && util.config.semantics == Total)) {
+            } else if (exp == util.term(1) || (exp == util.term(-1) && util.config.semantics == Semantics::Total)) {
                 return base;
-            } else if (exp->is_value() && (util.value(exp) >= 0 || util.config.semantics == Total)) {
+            } else if (exp->is_value() && (util.value(exp) >= 0 || util.config.semantics == Semantics::Total)) {
                 return util.solver->make_term(Pow, base, util.term(abs(util.value(exp))));
             }
             if (util.is_abstract_exp(base)) {

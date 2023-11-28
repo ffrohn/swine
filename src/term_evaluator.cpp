@@ -11,7 +11,7 @@ Term TermEvaluator::evaluate(Term expression) const {
         auto it {expression->begin()};
         const auto fst {util.value(evaluate(*(++it)))};
         const auto snd {stol(util.value(evaluate(*(++it))).str())};
-        if (snd >= 0 || util.config.semantics == Total) {
+        if (snd >= 0 || util.config.semantics == Semantics::Total) {
             return util.term(pow(fst, abs(snd)));
         } else {
             return util.solver->get_value(expression);

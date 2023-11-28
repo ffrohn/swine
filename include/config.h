@@ -5,11 +5,11 @@
 
 #include <unordered_set>
 
-enum SolverKind {
+enum class SolverKind {
     Z3, CVC5
 };
 
-enum Semantics {
+enum class Semantics {
     Partial, Total
 };
 
@@ -18,8 +18,8 @@ struct Config {
     bool log {false};
     bool statistics {false};
     bool eager_symmetry_lemmas {false};
-    SolverKind solver_kind {SolverKind::CVC5};
-    Semantics semantics {Partial};
+    SolverKind solver_kind {SolverKind::Z3};
+    Semantics semantics {Semantics::Partial};
     std::unordered_set<LemmaKind> active_lemma_kinds {lemma_kind::values};
     std::unordered_set<PreprocKind> active_preprocessings{preproc_kind::values};
 

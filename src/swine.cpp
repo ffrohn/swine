@@ -128,7 +128,7 @@ void Swine::base_symmetry_lemmas(const Term e, TermVec &lemmas) {
             Op(Equal),
             make_term(Op(Mod), exp, util.term(2)),
             util.term(1))};
-        if (config.semantics == Partial) {
+        if (config.semantics == Semantics::Partial) {
             premise_even = make_term(
                 Op(And),
                 premise_even,
@@ -147,7 +147,7 @@ void Swine::exp_symmetry_lemmas(const Term e, TermVec &lemmas) {
     if (!config.is_active(LemmaKind::Symmetry)) {
         return;
     }
-    if (config.semantics == Total) {
+    if (config.semantics == Semantics::Total) {
         const auto [base, exp] {util.decompose_exp(e)};
         const auto lemma {make_term(
             Op(Equal),
@@ -196,7 +196,7 @@ void Swine::compute_bounding_lemmas(const ExpGroup &g) {
             // base = 0 && ... ==> base^exp = 0
             const auto conclusion {make_term(Op(Equal), e, util.term(0))};
             TermVec premises {make_term(Op(Equal), base, util.term(0))};
-            if (config.semantics == Total) {
+            if (config.semantics == Semantics::Total) {
                 premises.push_back(make_term(Op(Distinct), base, util.term(0)));
             } else {
                 premises.push_back(make_term(Op(Gt), exp, util.term(0)));
@@ -211,7 +211,7 @@ void Swine::compute_bounding_lemmas(const ExpGroup &g) {
             // base = 1 && ... ==> base^exp = 1
             const auto conclusion {make_term(Op(Equal), e, util.term(1))};
             Term premise {make_term(Op(Equal), base, util.term(1))};
-            if (config.semantics == Partial) {
+            if (config.semantics == Semantics::Partial) {
                 premise = make_term(
                     And,
                     premise,
@@ -320,7 +320,7 @@ std::optional<Swine::EvaluatedExponential> Swine::evaluate_exponential(const Ter
     ++it;
     res.exponent = *it;
     res.exponent_val = to_int(get_value(*it));
-    if (util.config.semantics == Partial && res.exponent_val < 0) {
+    if (util.config.semantics == Semantics::Partial && res.exponent_val < 0) {
         return {};
     }
     res.expected_val = boost::multiprecision::pow(res.base_val, abs(res.exponent_val));
@@ -556,7 +556,7 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
                     Equal,
                     util.term(0),
                     make_term(Mod, ee->exp_expression, ee->base))};
-                if (config.semantics == Partial) {
+                if (config.semantics == Semantics::Partial) {
                     l = make_term(
                         Implies,
                         make_term(Gt, ee->exponent, util.term(0)),
@@ -854,15 +854,15 @@ Term Swine::make_term(Op op, const TermVec & terms) const {
         case Lt:
         case Ge:
         case Gt: {
-            auto it {terms.begin()};
-            auto last = *it;
-            TermVec args;
-            for (++it; it != terms.end(); ++it) {
-                args.push_back(util.solver->make_term(op, last, *it));
-                last = *it;
+                auto it {terms.begin()};
+                auto last = *it;
+                TermVec args;
+                for (++it; it != terms.end(); ++it) {
+                    args.push_back(util.solver->make_term(op, last, *it));
+                    last = *it;
+                }
+                return util.solver->make_term(And, args);
             }
-            return util.solver->make_term(And, args);
-        }
         default: break;
         }
     }

@@ -24,7 +24,6 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     };
-    SmtSolver solver;
     Config config;
     std::optional<std::string> input;
     auto show_version {true};
@@ -32,10 +31,8 @@ int main(int argc, char *argv[]) {
         if (boost::iequals(argv[arg], "--solver")) {
             const std::string str {get_next()};
             if (boost::iequals(str, "z3")) {
-                solver = smt::Z3SolverFactory::create(false);
                 config.solver_kind = SolverKind::Z3;
             } else if (boost::iequals(str, "cvc5")) {
-                solver = smt::Cvc5SolverFactory::create(false);
                 config.solver_kind = SolverKind::CVC5;
             } else {
                 throw std::invalid_argument("unknown solver " + str);
@@ -56,9 +53,9 @@ int main(int argc, char *argv[]) {
         } else if (boost::iequals(argv[arg], "--semantics")) {
             const std::string str {get_next()};
             if (boost::iequals(str, "total")) {
-                config.semantics = Total;
+                config.semantics = Semantics::Total;
             } else if (boost::iequals(str, "partial")) {
-                config.semantics = Partial;
+                config.semantics = Semantics::Partial;
             }  else {
                 throw std::invalid_argument("unknown semantics " + str);
             }
@@ -89,8 +86,16 @@ int main(int argc, char *argv[]) {
             argument_parsing_failed(argv[arg]);
         }
     }
-    if (!solver) {
+    SmtSolver solver;
+    switch (config.solver_kind) {
+    case SolverKind::Z3:
         solver = smt::Z3SolverFactory::create(false);
+        break;
+    case SolverKind::CVC5:
+        solver = smt::Cvc5SolverFactory::create(false);
+        break;
+    default:
+        throw std::invalid_argument("unknown solver");
     }
     if (!input) {
         throw std::invalid_argument("missing input file");
