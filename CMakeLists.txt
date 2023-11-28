@@ -55,6 +55,8 @@ target_sources(${EXECUTABLE} PRIVATE
     "${PROJECT_SOURCE_DIR}/src/brute_force.cpp"
     "${PROJECT_SOURCE_DIR}/include/util.h"
     "${PROJECT_SOURCE_DIR}/src/util.cpp"
+    "${PROJECT_SOURCE_DIR}/include/lemma_kind.h"
+    "${PROJECT_SOURCE_DIR}/src/lemma_kind.cpp"
     "${PROJECT_SOURCE_DIR}/include/config.h"
     "${PROJECT_SOURCE_DIR}/src/main.cpp"
     "${PROJECT_SOURCE_DIR}/include/version.h"

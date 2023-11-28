@@ -4,23 +4,6 @@
 
 #include <assert.h>
 
-std::ostream& operator<<(std::ostream &s, const LemmaKind kind) {
-    switch (kind) {
-    case Symmetry: s << "symmetry";
-        break;
-    case Modulo: s << "modulo";
-        break;
-    case Bounding: s << "bounding";
-        break;
-    case Interpolation: s << "interpolation";
-        break;
-    case Monotonicity: s << "monotonicity";
-        break;
-    default: throw std::invalid_argument("unknown lemma kind");
-    }
-    return s;
-}
-
 std::ostream& operator<<(std::ostream &s, const Swine::EvaluatedExponential &exp) {
     return s <<
            "abstract: exp(" <<
@@ -75,28 +58,31 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
     util.solver->assert_formula(pp);
     if (config.validate) frames.back().lemmas.emplace(pp, kind);
     switch (kind) {
-    case Interpolation: ++stats.interpolation_lemmas;
+    case LemmaKind::Interpolation: ++stats.interpolation_lemmas;
         break;
-    case Symmetry: ++stats.symmetry_lemmas;
+    case LemmaKind::Symmetry: ++stats.symmetry_lemmas;
         break;
-    case Modulo: ++stats.modulo_lemmas;
+    case LemmaKind::Modulo: ++stats.modulo_lemmas;
         break;
-    case Bounding: ++stats.bounding_lemmas;
+    case LemmaKind::Bounding: ++stats.bounding_lemmas;
         break;
-    case Monotonicity: ++stats.monotonicity_lemmas;
+    case LemmaKind::Monotonicity: ++stats.monotonicity_lemmas;
         break;
     default: throw std::invalid_argument("unknown lemma kind");
     }
 }
 
 void Swine::add_symmetry_lemmas(const Term e) {
+    if (!config.is_active(LemmaKind::Symmetry)) {
+        return;
+    }
     const auto [base, exp] {util.decompose_exp(e)};
     if (config.semantics == Total) {
         const auto lemma {make_term(
             Op(Equal),
             e,
             util.make_exp(base, make_term(Op(Negate), exp)))};
-        add_lemma(lemma, Symmetry);
+        add_lemma(lemma, LemmaKind::Symmetry);
     }
     if (!base->is_value() || util.value(base) < 0) {
         const auto conclusion_even {make_term(
@@ -131,12 +117,15 @@ void Swine::add_symmetry_lemmas(const Term e) {
                 premise_odd,
                 make_term(Op(Gt), exp, util.term(0)));
         }
-        add_lemma(make_term(Op(Implies), premise_even, conclusion_even), Symmetry);
-        add_lemma(make_term(Op(Implies), premise_odd, conclusion_odd), Symmetry);
+        add_lemma(make_term(Op(Implies), premise_even, conclusion_even), LemmaKind::Symmetry);
+        add_lemma(make_term(Op(Implies), premise_odd, conclusion_odd), LemmaKind::Symmetry);
     }
 }
 
 void Swine::compute_bounding_lemmas(const Term e) {
+    if (!config.is_active(LemmaKind::Bounding)) {
+        return;
+    }
     auto [it, inserted] {frames.back().bounding_lemmas.emplace(e, TermVec())};
     if (!inserted) {
         return;
@@ -214,14 +203,26 @@ void Swine::bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &l
     for (auto &f: frames) {
         auto map_it {f.bounding_lemmas.find(e)};
         if (map_it != f.bounding_lemmas.end()) {
-            auto &set {map_it->second};
-            for (auto set_it = set.begin(); set_it != set.end();) {
-                if (get_value(*set_it) != util.True) {
-                    lemmas.emplace(*set_it, Bounding);
-                    set_it = set.erase(set_it);
+            for (const auto &l: map_it->second) {
+                if (get_value(l) != util.True) {
+                    lemmas.emplace(l, LemmaKind::Bounding);
                     return;
-                } else {
-                    ++set_it;
+                }
+            }
+        }
+    }
+}
+
+void Swine::bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
+    if (!config.is_active(LemmaKind::Bounding)) {
+        return;
+    }
+    for (const auto &f: frames) {
+        for (const auto &g: f.exp_groups) {
+            for (const auto &e: g.maybe_non_neg_base()) {
+                const auto ee {evaluate_exponential(e)};
+                if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
+                    bounding_lemmas(e, lemmas);
                 }
             }
         }
@@ -395,7 +396,23 @@ void Swine::interpolation_lemma(const EvaluatedExponential &e, std::unordered_ma
         lemma = interpolation_lemma(e.exp_expression, true, {e.base_val, e.exponent_val}, nearest);
     }
     vec.emplace_back(e.base_val, e.exponent_val);
-    lemmas.emplace(lemma, Interpolation);
+    lemmas.emplace(lemma, LemmaKind::Interpolation);
+}
+
+void Swine::interpolation_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
+    if (!config.is_active(LemmaKind::Interpolation)) {
+        return;
+    }
+    for (const auto &f: frames) {
+        for (const auto &g: f.exp_groups) {
+            for (const auto &e: g.maybe_non_neg_base()) {
+                const auto ee {evaluate_exponential(e)};
+                if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
+                    interpolation_lemma(*ee, lemmas);
+                }
+            }
+        }
+    }
 }
 
 std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, const EvaluatedExponential &e2) {
@@ -454,6 +471,9 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
 }
 
 void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
+    if (!config.is_active(LemmaKind::Monotonicity)) {
+        return;
+    }
     // search for pairs exp(b,e1), exp(b,e2) whose models violate monotonicity of exp
     TermVec exps;
     for (const auto &f: frames) {
@@ -474,7 +494,7 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
                 if (e2) {
                     const auto mon_lemma {monotonicity_lemma(*e1, *e2)};
                     if (mon_lemma) {
-                        lemmas.emplace(*mon_lemma, Monotonicity);
+                        lemmas.emplace(*mon_lemma, LemmaKind::Monotonicity);
                     }
                 }
             }
@@ -483,6 +503,9 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
 }
 
 void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
+    if (!config.is_active(LemmaKind::Modulo)) {
+        return;
+    }
     for (auto f: frames) {
         for (auto e: f.exps) {
             const auto ee {evaluate_exponential(e)};
@@ -502,7 +525,7 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
                         make_term(Distinct, ee->exponent, util.term(0)),
                         l);
                 }
-                lemmas.emplace(l, Modulo);
+                lemmas.emplace(l, LemmaKind::Modulo);
             }
         }
     }
@@ -552,30 +575,19 @@ Result Swine::check_sat() {
                 monotonicity_lemmas(lemmas);
             }
             if (lemmas.empty()) {
-                for (const auto &f: frames) {
-                    for (const auto &g: f.exp_groups) {
-                        for (const auto &e: g.maybe_non_neg_base()) {
-                            const auto ee {evaluate_exponential(e)};
-                            if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
-                                bounding_lemmas(e, lemmas);
-                            }
-                        }
-                    }
-                }
+                bounding_lemmas(lemmas);
             }
             if (lemmas.empty()) {
                 mod_lemmas(lemmas);
             }
             if (lemmas.empty()) {
-                for (const auto &f: frames) {
-                    for (const auto &g: f.exp_groups) {
-                        for (const auto &e: g.maybe_non_neg_base()) {
-                            const auto ee {evaluate_exponential(e)};
-                            if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
-                                interpolation_lemma(*ee, lemmas);
-                            }
-                        }
-                    }
+                interpolation_lemmas(lemmas);
+            }
+            if (lemmas.empty()) {
+                if (config.is_active(LemmaKind::Interpolation)) {
+                    throw std::logic_error("refinement failed, but interpolation is enabled");
+                } else {
+                    return Result(ResultType::UNKNOWN, "Refinement failed, please activate interpolation lemmas.");
                 }
             }
             for (const auto &[l, kind]: lemmas) {

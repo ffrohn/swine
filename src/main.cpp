@@ -53,6 +53,12 @@ int main(int argc, char *argv[]) {
             }  else {
                 throw std::invalid_argument("unknown semantics " + str);
             }
+        } else if (boost::istarts_with(argv[arg], "--no-")) {
+            for (const auto k: lemma_kind::values) {
+                if (boost::iequals(argv[arg], "--no-" + lemma_kind::str(k))) {
+                    config.deactivate(k);
+                }
+            }
         } else if (!input) {
             input = argv[arg];
         } else {

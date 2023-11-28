@@ -11,10 +11,6 @@
 using namespace smt;
 using namespace boost::multiprecision;
 
-enum LemmaKind {
-    Symmetry, Bounding, Interpolation, Monotonicity, Modulo
-};
-
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind);
 
 class Swine: public AbsSmtSolver {
@@ -148,10 +144,12 @@ public:
     void add_symmetry_lemmas(const Term e);
     void compute_bounding_lemmas(const Term e);
     void bounding_lemmas(const Term e, std::unordered_map<Term, LemmaKind> &lemmas);
+    void bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     std::optional<EvaluatedExponential> evaluate_exponential(const Term exp_expression) const;
     Interpolant interpolate(Term t, const unsigned pos, const cpp_int x1, const cpp_int x2);
     Term interpolation_lemma(Term t, const bool upper, const std::pair<cpp_int, long> a, const std::pair<cpp_int, long> bx2);
     void interpolation_lemma(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas);
+    void interpolation_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);
     std::optional<Term> monotonicity_lemma(const EvaluatedExponential &e1, const EvaluatedExponential &e2);
     void monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
