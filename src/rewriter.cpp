@@ -3,9 +3,6 @@
 Rewriter::Rewriter(Util &util): util(util) {}
 
 Term Rewriter::rewrite(Term t) {
-    if (util.config.semantics == Semantics::Partial) {
-        return t;
-    }
     if (!util.is_app(t)) {
         return t;
     } else {
@@ -23,7 +20,7 @@ Term Rewriter::rewrite(Term t) {
             } else if (exp->is_value() && (util.value(exp) >= 0 || util.config.semantics == Semantics::Total)) {
                 return util.solver->make_term(Pow, base, util.term(abs(util.value(exp))));
             }
-            if (util.is_abstract_exp(base)) {
+            if (util.is_abstract_exp(base) && util.config.semantics == Semantics::Total) {
                 const auto [inner_base, inner_exp] {util.decompose_exp(base)};
                 return util.solver->make_term(
                     Apply,
@@ -35,7 +32,7 @@ Term Rewriter::rewrite(Term t) {
             if (util.is_app(children.at(0)) && children.at(0)->get_op().prim_op == Negate) {
                 return *children.at(0)->begin();
             }
-        } else if (t->get_op().prim_op == Mult) {
+        } else if (t->get_op().prim_op == Mult && util.config.semantics == Semantics::Total) {
             std::unordered_map<Term, UnorderedTermSet> exp_map;
             TermVec new_children;
             for (const auto &c: children) {
@@ -68,7 +65,7 @@ Term Rewriter::rewrite(Term t) {
             if (changed) {
                 return util.solver->make_term(Mult, new_children);
             }
-        } else if (t->get_op().prim_op == Pow) {
+        } else if (t->get_op().prim_op == Pow && util.config.semantics == Semantics::Total) {
             const auto fst {rewrite(*t->begin())};
             const auto snd {rewrite(*std::next(t->begin()))};
             if (util.is_abstract_exp(fst) && snd->is_value() && util.value(snd) >= 0) {
