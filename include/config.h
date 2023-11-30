@@ -18,6 +18,7 @@ struct Config {
     bool log {false};
     bool statistics {false};
     bool eager_symmetry_lemmas {false};
+    bool get_lemmas {false};
     SolverKind solver_kind {SolverKind::Z3};
     Semantics semantics {Semantics::Partial};
     std::unordered_set<LemmaKind> active_lemma_kinds {lemma_kind::values};

@@ -38,6 +38,9 @@ Swine::Swine(const SmtSolver solver, const Config &config):
     eval(util),
     config(config) {
     solver->set_opt("produce-models", "true");
+    if (config.get_lemmas) {
+        solver->set_opt("produce-unsat-assumptions", "true");
+    }
     frames.emplace_back();
 }
 
@@ -55,8 +58,16 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
         std::cout << t << std::endl;
     }
     const auto pp {preproc.preprocess(t)};
-    util.solver->assert_formula(pp);
-    if (config.validate) frames.back().lemmas.emplace(pp, kind);
+    if (config.validate || config.get_lemmas) frames.back().lemmas.emplace(pp, kind);
+    if (config.get_lemmas) {
+        static uint count {0};
+        const auto assumption {make_symbol("assumption_" + std::to_string(count), util.solver->make_sort(BOOL))};
+        ++count;
+        frames.back().assumptions.emplace(assumption, pp);
+        util.solver->assert_formula(util.solver->make_term(Equal, assumption, pp));
+    } else {
+        util.solver->assert_formula(pp);
+    }
     switch (kind) {
     case LemmaKind::Interpolation: ++stats.interpolation_lemmas;
         break;
@@ -280,9 +291,8 @@ void Swine::assert_formula(const Term & t) {
         std::cout << t << std::endl;
     }
     const auto preprocessed {preproc.preprocess(t)};
-    if (config.validate) {
-        frames.back().assertions.push_back(t);
-        frames.back().preprocessed_assertions.push_back(preprocessed);
+    if (config.validate || config.get_lemmas) {
+        frames.back().preprocessed_assertions.emplace(preprocessed, t);
     }
     util.solver->assert_formula(preprocessed);
     for (const auto &g: exp_finder.find_exps(preprocessed)) {
@@ -449,7 +459,7 @@ void Swine::interpolation_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
         for (const auto &g: f.exp_groups) {
             for (const auto &e: g.maybe_non_neg_base()) {
                 const auto ee {evaluate_exponential(e)};
-                if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
+                if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val > 0 && ee->exponent_val > 0) {
                     interpolation_lemma(*ee, lemmas);
                 }
             }
@@ -551,7 +561,7 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     for (auto f: frames) {
         for (auto e: f.exps) {
             const auto ee {evaluate_exponential(e)};
-            if (ee->base->is_value() && ee->exponent_val > 0 && ee->exp_expression_val % abs(ee->base_val) != 0) {
+            if (ee->exponent_val > 0 && ee->exp_expression_val % abs(ee->base_val) != 0) {
                 auto l {make_term(
                     Equal,
                     util.term(0),
@@ -577,10 +587,39 @@ Result Swine::check_sat() {
     Result res;
     while (true) {
         ++stats.iterations;
-        res = util.solver->check_sat();
+        if (config.get_lemmas) {
+            TermVec assumptions;
+            for (const auto &f: frames) {
+                for (const auto &[a,_]: f.assumptions) {
+                    assumptions.push_back(a);
+                }
+            }
+            res = util.solver->check_sat_assuming(assumptions);
+        } else {
+            res = util.solver->check_sat();
+        }
         if (res.is_unsat()) {
             if (config.validate) {
                 brute_force();
+            }
+            if (config.get_lemmas) {
+                UnorderedTermSet core;
+                util.solver->get_unsat_assumptions(core);
+                std::cout << "===== lemmas =====" << std::endl;
+                for (const auto &k: lemma_kind::values) {
+                    auto first {true};
+                    for (const auto &f: frames) {
+                        for (const auto &[a,l]: f.assumptions) {
+                            if (core.contains(a) && f.lemmas.at(l) == k) {
+                                if (first) {
+                                    std::cout << "----- " << k << " lemmas -----" << std::endl;
+                                    first = false;
+                                }
+                                std::cout << l << std::endl;
+                            }
+                        }
+                    }
+                }
             }
             break;
         } else if (res.is_unknown()) {
@@ -683,8 +722,19 @@ Term Swine::get_value(const Term & t) const {
 UnorderedTermMap Swine::get_model() const {
     UnorderedTermMap res;
     bool uf {false};
+    UnorderedTermSet assumptions;
+    if (config.get_lemmas) {
+        for (const auto &f: frames) {
+            for (const auto &[a,_]: f.assumptions) {
+                assumptions.emplace(a);
+            }
+        }
+    }
     for (const auto &f: frames) {
         for (const auto &x: f.symbols) {
+            if (assumptions.contains(x)) {
+                continue;
+            }
             if (!uf && x->get_sort()->get_sort_kind() == SortKind::FUNCTION) {
                 uf = true;
                 std::cerr << "get_model does not support uninterpreted functions at the moment" << std::endl;
@@ -892,7 +942,7 @@ void Swine::dump_smt2(std::string filename) const {
 
 void Swine::verify() const {
     for (const auto &f: frames) {
-        for (const auto &a: f.assertions) {
+        for (const auto &[_,a]: f.preprocessed_assertions) {
             if (eval.evaluate(a) != util.True) {
                 std::cout << "Validation of the following assertion failed:" << std::endl;
                 std::cout << a << std::endl;
@@ -909,7 +959,7 @@ void Swine::verify() const {
 void Swine::brute_force() {
     TermVec assertions;
     for (const auto &f: frames) {
-        for (const auto &a: f.preprocessed_assertions) {
+        for (const auto &[a,_]: f.preprocessed_assertions) {
             assertions.push_back(a);
         }
     }

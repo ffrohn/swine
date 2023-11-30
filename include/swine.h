@@ -21,8 +21,10 @@ private:
         UnorderedTermSet exps;
         std::vector<ExpGroup> exp_groups;
         UnorderedTermSet symbols;
-        TermVec assertions;
-        TermVec preprocessed_assertions;
+        // mapping from assumption literals to the corresponding formulas for unsat cores
+        UnorderedTermMap assumptions;
+        // mapping from preprocessed to original assertions
+        UnorderedTermMap preprocessed_assertions;
         std::unordered_map<Term, LemmaKind> lemmas;
         std::unordered_map<Term, TermVec> bounding_lemmas;
     };

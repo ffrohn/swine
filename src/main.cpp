@@ -39,6 +39,8 @@ int main(int argc, char *argv[]) {
             }
         } else if (boost::iequals(argv[arg], "--validate")) {
             config.validate = true;
+        } else if (boost::iequals(argv[arg], "--get-lemmas")) {
+            config.get_lemmas = true;
         } else if (boost::iequals(argv[arg], "--log")) {
             config.log = true;
         } else if (boost::iequals(argv[arg], "--stats")) {
