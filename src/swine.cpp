@@ -60,7 +60,7 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
     const auto pp {preproc.preprocess(t)};
     if (config.validate || config.get_lemmas) frames.back().lemmas.emplace(pp, kind);
     if (config.get_lemmas) {
-        static uint count {0};
+        static unsigned int count {0};
         const auto assumption {make_symbol("assumption_" + std::to_string(count), util.solver->make_sort(BOOL))};
         ++count;
         frames.back().assumptions.emplace(assumption, pp);

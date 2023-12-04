@@ -42,13 +42,13 @@ private:
     friend std::ostream& operator<<(std::ostream &s, const EvaluatedExponential &exp);
 
     struct Statistics {
-        uint iterations {0};
-        uint symmetry_lemmas {0};
-        uint bounding_lemmas {0};
-        uint modulo_lemmas {0};
-        uint interpolation_lemmas {0};
-        uint monotonicity_lemmas {0};
-        uint num_assertions {0};
+        unsigned int iterations {0};
+        unsigned int symmetry_lemmas {0};
+        unsigned int bounding_lemmas {0};
+        unsigned int modulo_lemmas {0};
+        unsigned int interpolation_lemmas {0};
+        unsigned int monotonicity_lemmas {0};
+        unsigned int num_assertions {0};
         bool non_constant_base {false};
     };
 

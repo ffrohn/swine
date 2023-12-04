@@ -7,7 +7,7 @@ BruteForce::BruteForce(Util &util, const smt::TermVec &assertions, const smt::Te
     util.solver->reset_assertions();
 }
 
-bool BruteForce::next(const ulong weight, std::vector<std::pair<Term, ulong>>::iterator begin) {
+bool BruteForce::next(const unsigned long weight, std::vector<std::pair<Term, unsigned long>>::iterator begin) {
     auto it = begin;
     if (++it == current.end()) {
         return false;

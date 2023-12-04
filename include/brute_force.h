@@ -11,13 +11,13 @@ class BruteForce {
     Util &util;
     TermVec assertions;
     TermVec exps;
-    ulong bound {0};
-    std::vector<std::pair<Term, ulong>> current;
+    unsigned long bound {0};
+    std::vector<std::pair<Term, unsigned long>> current;
 
-    static const uint max_bound {10};
+    static const unsigned int max_bound {10};
 
     bool next();
-    bool next(const ulong weight, std::vector<std::pair<Term, ulong>>::iterator begin);
+    bool next(const unsigned long weight, std::vector<std::pair<Term, unsigned long>>::iterator begin);
 
 public:
 
