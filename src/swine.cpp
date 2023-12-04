@@ -660,10 +660,10 @@ Result Swine::check_sat() {
                 symmetry_lemmas(lemmas);
             }
             if (lemmas.empty()) {
-                monotonicity_lemmas(lemmas);
+                bounding_lemmas(lemmas);
             }
             if (lemmas.empty()) {
-                bounding_lemmas(lemmas);
+                monotonicity_lemmas(lemmas);
             }
             if (lemmas.empty()) {
                 mod_lemmas(lemmas);
