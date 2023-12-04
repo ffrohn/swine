@@ -207,13 +207,16 @@ void Swine::compute_bounding_lemmas(const ExpGroup &g) {
             // base = 0 && ... ==> base^exp = 0
             const auto conclusion {make_term(Op(Equal), e, util.term(0))};
             TermVec premises {make_term(Op(Equal), base, util.term(0))};
+            PrimOp op;
             if (config.semantics == Semantics::Total) {
                 premises.push_back(make_term(Op(Distinct), base, util.term(0)));
+                op = Equal;
             } else {
+                op = Implies;
                 premises.push_back(make_term(Op(Gt), exp, util.term(0)));
             }
             lemma = make_term(
-                Op(Implies),
+                op,
                 make_term(Op(And), premises),
                 conclusion);
             set.push_back(lemma);
@@ -370,7 +373,7 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
     const auto [base, exp] {util.decompose_exp(t)};
     const auto op = upper ? Le : Ge;
     const auto gey {make_term(Op(Le), util.term(y1), exp, util.term(y2))};
-    auto ley {make_term(Op(Ge), exp, util.term(0))};
+    auto ley {make_term(Op(Gt), exp, util.term(0))};
     if (y2 > y1 + 1) {
         ley = make_term(
             Op(And),
@@ -400,7 +403,7 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
             const auto gex {make_term(Op(Le), util.term(x1), base, util.term(x2))};
             premise = make_term(Op(And), gex, gey);
         } else {
-            auto lex {make_term(Op(Ge), base, util.term(0))};
+            auto lex {make_term(Op(Gt), base, util.term(0))};
             if (x2 > x1 + 1) {
                 lex = make_term(
                     Op(And),
@@ -431,11 +434,11 @@ void Swine::interpolation_lemma(const EvaluatedExponential &e, std::unordered_ma
     Term lemma;
     auto &vec {interpolation_points.emplace(e.exp_expression, std::vector<std::pair<cpp_int, long>>()).first->second};
     if (e.exp_expression_val < e.expected_val) {
-        const auto min_base = e.base_val > 0 ? e.base_val - 1 : e.base_val;
-        const auto min_exp = e.exponent_val > 0 ? e.exponent_val - 1 : e.exponent_val;
+        const auto min_base = e.base_val > 1 ? e.base_val - 1 : e.base_val;
+        const auto min_exp = e.exponent_val > 1 ? e.exponent_val - 1 : e.exponent_val;
         lemma = interpolation_lemma(e.exp_expression, false, {min_base, min_exp}, {min_base + 1, min_exp + 1});
     } else {
-        std::pair<cpp_int, long> nearest {0, 0};
+        std::pair<cpp_int, long> nearest {1, 1};
         auto min_dist {e.base_val * e.base_val + e.exponent_val * e.exponent_val};
         for (const auto &[x, y]: vec) {
             const auto x_dist {x - e.base_val};
@@ -514,6 +517,7 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
         Op(Implies),
         make_term(
             Op(And),
+            make_term(Lt, util.term(0), smaller.base),
             make_term(
                 Op(Le),
                 util.term(0),
@@ -532,7 +536,7 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
         for (const auto &g: f.exp_groups) {
             for (const auto &e: g.maybe_non_neg_base()) {
                 const auto [base, exp] {util.decompose_exp(e)};
-                if (util.value(get_value(base)) >= 0 && util.value(get_value(exp)) >= 0) {
+                if (util.value(get_value(base)) > 0 && util.value(get_value(exp)) >= 0) {
                     exps.push_back(e);
                 }
             }
