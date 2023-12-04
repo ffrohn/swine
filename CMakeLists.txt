@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(EXECUTABLE swine)
 
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+set(BUILD_SHARED_LIBS OFF)
+add_link_options(-static)
+
 set(INCLUDE_DIRS
   "${PROJECT_SOURCE_DIR}/include")
 
@@ -33,8 +37,16 @@ find_library(SWITCH smt-switch)
 message(STATUS "smt-switch: ${SWITCH}")
 find_library(SWITCH_CVC5 smt-switch-cvc5)
 message(STATUS "smt-switch-cvc5: ${SWITCH_CVC5}")
+find_library(CVC5 cvc5)
+message(STATUS "cvc5: ${CVC5}")
 find_library(SWITCH_Z3 smt-switch-z3)
 message(STATUS "smt-switch-z3: ${SWITCH_Z3}")
+find_library(Z3 z3)
+message(STATUS "z3: ${Z3}")
+find_library(CLN cln)
+message(STATUS "cln: ${CLN}")
+find_library(GMP gmp)
+message(STATUS "gmp: ${GMP}")
 
 add_executable(${EXECUTABLE} "")
 
@@ -68,7 +80,10 @@ target_sources(${EXECUTABLE} PRIVATE
 include_directories(${INCLUDE_DIRS})
 
 target_link_libraries(${EXECUTABLE}
-    ${SWITCH}
     ${SWITCH_CVC5}
     ${SWITCH_Z3}
+    ${Z3}
+    ${SWITCH}
+    ${CLN}
+    ${GMP}
 )
