@@ -124,39 +124,39 @@ void Swine::base_symmetry_lemmas(const Term e, TermVec &lemmas) {
     const auto [base, exp] {util->decompose_exp(e)};
     if (!base->is_value() || util->value(base) < 0) {
         const auto conclusion_even {make_term(
-            Op(Equal),
+            Equal,
             e,
             util->make_exp(
-                make_term(Op(Negate), base),
+                make_term(Negate, base),
                 exp))};
         const auto conclusion_odd {make_term(
-            Op(Equal),
+            Equal,
             e,
             make_term(
-                Op(Negate),
+                Negate,
                 util->make_exp(
-                    make_term(Op(Negate), base),
+                    make_term(Negate, base),
                     exp)))};
         auto premise_even {make_term(
-            Op(Equal),
-            make_term(Op(Mod), exp, util->term(2)),
+            Equal,
+            make_term(Mod, exp, util->term(2)),
             util->term(0))};
         auto premise_odd {make_term(
-            Op(Equal),
-            make_term(Op(Mod), exp, util->term(2)),
+            Equal,
+            make_term(Mod, exp, util->term(2)),
             util->term(1))};
         if (config.semantics == Semantics::Partial) {
             premise_even = make_term(
-                Op(And),
+                And,
                 premise_even,
-                make_term(Op(Ge), exp, util->term(0)));
+                make_term(Ge, exp, util->term(0)));
             premise_odd = make_term(
-                Op(And),
+                And,
                 premise_odd,
-                make_term(Op(Gt), exp, util->term(0)));
+                make_term(Gt, exp, util->term(0)));
         }
-        lemmas.push_back(make_term(Op(Implies), premise_even, conclusion_even));
-        lemmas.push_back(make_term(Op(Implies), premise_odd, conclusion_odd));
+        lemmas.push_back(make_term(Implies, premise_even, conclusion_even));
+        lemmas.push_back(make_term(Implies, premise_odd, conclusion_odd));
     }
 }
 
@@ -167,9 +167,9 @@ void Swine::exp_symmetry_lemmas(const Term e, TermVec &lemmas) {
     if (config.semantics == Semantics::Total) {
         const auto [base, exp] {util->decompose_exp(e)};
         const auto lemma {make_term(
-            Op(Equal),
+            Equal,
             e,
-            util->make_exp(base, make_term(Op(Negate), exp)))};
+            util->make_exp(base, make_term(Negate, exp)))};
         lemmas.push_back(lemma);
     }
 }
@@ -188,66 +188,66 @@ void Swine::compute_bounding_lemmas(const ExpGroup &g) {
         Term lemma;
         // exp = 0 ==> base^exp = 1
         lemma = make_term(
-            Op(Implies),
-            make_term(Op(Equal), exp, util->term(0)),
-            make_term(Op(Equal), e, util->term(1)));
+            Implies,
+            make_term(Equal, exp, util->term(0)),
+            make_term(Equal, e, util->term(1)));
         set.push_back(lemma);
         // exp = 1 ==> base^exp = base
         lemma = make_term(
-            Op(Implies),
-            make_term(Op(Equal), exp, util->term(1)),
-            make_term(Op(Equal), e, base));
+            Implies,
+            make_term(Equal, exp, util->term(1)),
+            make_term(Equal, e, base));
         set.push_back(lemma);
         if (!base->is_value() || util->value(base) == 0) {
             // base = 0 && ... ==> base^exp = 0
-            const auto conclusion {make_term(Op(Equal), e, util->term(0))};
-            TermVec premises {make_term(Op(Equal), base, util->term(0))};
+            const auto conclusion {make_term(Equal, e, util->term(0))};
+            TermVec premises {make_term(Equal, base, util->term(0))};
             PrimOp op;
             if (config.semantics == Semantics::Total) {
-                premises.push_back(make_term(Op(Distinct), base, util->term(0)));
+                premises.push_back(make_term(Distinct, base, util->term(0)));
                 op = Equal;
             } else {
                 op = Implies;
-                premises.push_back(make_term(Op(Gt), exp, util->term(0)));
+                premises.push_back(make_term(Gt, exp, util->term(0)));
             }
             lemma = make_term(
                 op,
-                make_term(Op(And), premises),
+                make_term(And, premises),
                 conclusion);
             set.push_back(lemma);
         }
         if (!base->is_value() || util->value(base) == 1) {
             // base = 1 && ... ==> base^exp = 1
-            const auto conclusion {make_term(Op(Equal), e, util->term(1))};
-            Term premise {make_term(Op(Equal), base, util->term(1))};
+            const auto conclusion {make_term(Equal, e, util->term(1))};
+            Term premise {make_term(Equal, base, util->term(1))};
             if (config.semantics == Semantics::Partial) {
                 premise = make_term(
                     And,
                     premise,
-                    make_term(Op(Ge), exp, util->term(0)));
+                    make_term(Ge, exp, util->term(0)));
             }
-            lemma = make_term(Op(Implies), premise, conclusion);
+            lemma = make_term(Implies, premise, conclusion);
             set.push_back(lemma);
         }
         if (!base->is_value() || util->value(base) > 1) {
             // exp + base > 4 && s > 1 && t > 1 ==> base^exp > s * t + 1
             lemma = make_term(
-                Op(Implies),
+                Implies,
                 make_term(
-                    Op(And),
+                    And,
                     make_term(
-                        Op(Gt),
-                        make_term(Op(Plus), base, exp),
+                        Gt,
+                        make_term(Plus, base, exp),
                         util->term(4)),
-                    make_term(Op(Gt), base, util->term(1)),
-                    make_term(Op(Gt), exp, util->term(1))),
+                    make_term(Gt, base, util->term(1)),
+                    make_term(Gt, exp, util->term(1))),
                 make_term(
-                    Op(Gt),
+                    Gt,
                     e,
                     make_term(
-                        Op(Plus),
+                        Plus,
                         make_term(
-                            Op(Mult),
+                            Mult,
                             base,
                             exp),
                         util->term(1))));
@@ -339,15 +339,15 @@ Swine::Interpolant Swine::interpolate(Term t, const unsigned pos, const cpp_int 
     const auto at_x2 {make_term(t->get_op(), children)};
     res.factor = abs(x2 - x1);
     res.t = make_term(
-        Op(Plus),
+        Plus,
         make_term(
-            Op(Mult),
+            Mult,
             util->term(res.factor),
             at_x1),
         make_term(
-            Op(Mult),
-            make_term(Op(Minus), at_x2, at_x1),
-            make_term(Op(Minus), x, util->term(x1))));
+            Mult,
+            make_term(Minus, at_x2, at_x1),
+            make_term(Minus, x, util->term(x1))));
     return res;
 }
 
@@ -358,26 +358,26 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
     const auto y2 {std::max(a.second, b.second)};
     const auto [base, exp] {util->decompose_exp(t)};
     const auto op = upper ? Le : Ge;
-    const auto gey {make_term(Op(Le), util->term(y1), exp, util->term(y2))};
-    auto ley {make_term(Op(Gt), exp, util->term(0))};
+    const auto gey {make_term(Le, util->term(y1), exp, util->term(y2))};
+    auto ley {make_term(Gt, exp, util->term(0))};
     if (y2 > y1 + 1) {
         ley = make_term(
-            Op(And),
+            And,
             ley,
             make_term(
-                Op(Or),
-                make_term(Op(Ge), util->term(y1), exp),
-                make_term(Op(Ge), exp, util->term(y2))));
+                Or,
+                make_term(Ge, util->term(y1), exp),
+                make_term(Ge, exp, util->term(y2))));
     }
     if (base->is_value()) {
         const auto i {interpolate(t, 2, y1, y2)};
         const auto premise = upper ? gey : ley;
         return make_term(
-            Op(Implies),
+            Implies,
             premise,
             make_term(
-                Op(op),
-                make_term(Op(Mult), t, util->term(i.factor)),
+                op,
+                make_term(Mult, t, util->term(i.factor)),
                 i.t));
     } else {
         const auto at_y1 {util->make_exp(base, util->term(y1))};
@@ -386,33 +386,33 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
         const auto i2 {interpolate(at_y1, 1, x1, x2)};
         Term premise;
         if (upper) {
-            const auto gex {make_term(Op(Le), util->term(x1), base, util->term(x2))};
-            premise = make_term(Op(And), gex, gey);
+            const auto gex {make_term(Le, util->term(x1), base, util->term(x2))};
+            premise = make_term(And, gex, gey);
         } else {
-            auto lex {make_term(Op(Gt), base, util->term(0))};
+            auto lex {make_term(Gt, base, util->term(0))};
             if (x2 > x1 + 1) {
                 lex = make_term(
-                    Op(And),
+                    And,
                     lex,
                     make_term(
-                        Op(Or),
-                        make_term(Op(Ge), util->term(x1), base),
-                        make_term(Op(Ge), base, util->term(x2))));
+                        Or,
+                        make_term(Ge, util->term(x1), base),
+                        make_term(Ge, base, util->term(x2))));
             }
-            premise = make_term(Op(And), lex, ley);
+            premise = make_term(And, lex, ley);
         }
         const auto y_diff {util->term(y2 - y1)};
         const auto conclusion {make_term(
-            Op(op),
-            make_term(Op(Mult), t, util->term(i1.factor), y_diff),
+            op,
+            make_term(Mult, t, util->term(i1.factor), y_diff),
             make_term(
-                Op(Plus),
-                make_term(Op(Mult), i1.t, y_diff),
+                Plus,
+                make_term(Mult, i1.t, y_diff),
                 make_term(
-                    Op(Mult),
-                    make_term(Op(Minus), i2.t, i1.t),
-                    make_term(Op(Minus), exp, util->term(y1)))))};
-        return make_term(Op(Implies), premise, conclusion);
+                    Mult,
+                    make_term(Minus, i2.t, i1.t),
+                    make_term(Minus, exp, util->term(y1)))))};
+        return make_term(Implies, premise, conclusion);
     }
 }
 
@@ -469,29 +469,29 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
     }
     Term premise;
     const Term strict_exp_premise {make_term(
-        Op(Lt),
+        Lt,
         smaller.exponent,
         greater.exponent)};
     const Term non_strict_exp_premise {make_term(
-        Op(Le),
+        Le,
         smaller.exponent,
         greater.exponent)};
     if (!smaller.base->is_value() || !greater.base->is_value()) {
         const Term strict_base_premise {make_term(
-            Op(Lt),
+            Lt,
             smaller.base,
             greater.base)};
         const Term non_strict_base_premise {make_term(
-            Op(Le),
+            Le,
             smaller.base,
             greater.base)};
         premise =
             make_term(
-                Op(And),
+                And,
                 non_strict_base_premise,
                 non_strict_exp_premise,
                 make_term(
-                    Op(Or),
+                    Or,
                     strict_base_premise,
                     strict_exp_premise));
     } else if (smaller.base_val < greater.base_val) {
@@ -500,16 +500,16 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
         premise = strict_exp_premise;
     }
     return make_term(
-        Op(Implies),
+        Implies,
         make_term(
-            Op(And),
+            And,
             make_term(Lt, util->term(0), smaller.base),
             make_term(
-                Op(Le),
+                Le,
                 util->term(0),
                 smaller.exponent),
             premise),
-        make_term(Op(Lt), smaller.exp_expression, greater.exp_expression));
+        make_term(Lt, smaller.exp_expression, greater.exp_expression));
 }
 
 void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
@@ -911,8 +911,8 @@ Term Swine::make_term(Op op,
 }
 
 Term Swine::make_term(Op op, const TermVec & terms) const {
-    if (op == Op(Exp)) {
-        return solver->make_term(Op(Apply), util->exp, terms.front(), *(++terms.begin()));
+    if (op == Exp) {
+        return solver->make_term(Apply, util->exp, terms.front(), *(++terms.begin()));
     } else if (config.solver_kind == SolverKind::Z3 && terms.size() > 2) {
         switch (op.prim_op) {
         case Mult: {

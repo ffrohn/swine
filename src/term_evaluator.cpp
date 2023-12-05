@@ -7,7 +7,7 @@ TermEvaluator::TermEvaluator(const Util &util): util(util) {}
 Term TermEvaluator::evaluate(Term expression) const {
     if (!util.is_app(expression)) {
         return util.solver->get_value(expression);
-    } else if (expression->get_op() == Op(Apply) && *expression->begin() == util.exp) {
+    } else if (expression->get_op() == Apply && *expression->begin() == util.exp) {
         auto it {expression->begin()};
         const auto fst {util.value(evaluate(*(++it)))};
         const auto snd {Util::to_int(evaluate(*(++it)))};

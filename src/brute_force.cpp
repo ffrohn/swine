@@ -62,15 +62,15 @@ bool BruteForce::check_sat() {
             const auto base {*(++it)};
             const auto exponent {*(++it)};
             const auto exp_eq {util.solver->make_term(
-                Op(Equal),
+                Equal,
                 exponent,
                 util.solver->make_term(val, int_sort))};
             util.solver->assert_formula(exp_eq);
             const auto res_eq {util.solver->make_term(
-                Op(Equal),
+                Equal,
                 exp,
                 util.solver->make_term(
-                    Op(Pow),
+                    Pow,
                     base,
                     util.solver->make_term(val, int_sort)))};
             util.solver->assert_formula(res_eq);
