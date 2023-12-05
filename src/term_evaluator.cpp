@@ -10,7 +10,7 @@ Term TermEvaluator::evaluate(Term expression) const {
     } else if (expression->get_op() == Op(Apply) && *expression->begin() == util.exp) {
         auto it {expression->begin()};
         const auto fst {util.value(evaluate(*(++it)))};
-        const auto snd {stol(util.value(evaluate(*(++it))).str())};
+        const auto snd {Util::to_int(evaluate(*(++it)))};
         if (snd >= 0 || util.config.semantics == Semantics::Total) {
             return util.term(pow(fst, abs(snd)));
         } else {

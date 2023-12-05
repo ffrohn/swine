@@ -17,8 +17,8 @@ struct Config {
     bool validate {false};
     bool log {false};
     bool statistics {false};
-    bool eager_symmetry_lemmas {false};
     bool get_lemmas {false};
+    unsigned int rewrite_threshold {10};
     SolverKind solver_kind {SolverKind::Z3};
     Semantics semantics {Semantics::Partial};
     std::unordered_set<LemmaKind> active_lemma_kinds {lemma_kind::values};

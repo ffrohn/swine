@@ -27,6 +27,8 @@ private:
         UnorderedTermMap preprocessed_assertions;
         std::unordered_map<Term, LemmaKind> lemmas;
         std::unordered_map<Term, TermVec> bounding_lemmas;
+        bool has_overflow;
+        bool assert_failed;
     };
 
     struct EvaluatedExponential {
@@ -36,7 +38,7 @@ private:
         Term base;
         cpp_int base_val;
         Term exponent;
-        long exponent_val;
+        long long exponent_val;
     };
 
     friend std::ostream& operator<<(std::ostream &s, const EvaluatedExponential &exp);
@@ -65,7 +67,7 @@ private:
     ExpFinder exp_finder;
     TermEvaluator eval;
     std::vector<Frame> frames;
-    std::unordered_map<Term, std::vector<std::pair<cpp_int, long>>> interpolation_points;
+    std::unordered_map<Term, std::vector<std::pair<cpp_int, long long>>> interpolation_points;
     const Config &config;
 
 public:
@@ -143,7 +145,6 @@ public:
                     const UnorderedTermMap & substitution_map) const override;
     void dump_smt2(std::string filename) const override;
 
-    void add_symmetry_lemmas(const ExpGroup &g);
     void base_symmetry_lemmas(const Term e, TermVec &lemmas);
     void exp_symmetry_lemmas(const Term e, TermVec &lemmas);
     void symmetry_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
@@ -151,7 +152,7 @@ public:
     void bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     std::optional<EvaluatedExponential> evaluate_exponential(const Term exp_expression) const;
     Interpolant interpolate(Term t, const unsigned pos, const cpp_int x1, const cpp_int x2);
-    Term interpolation_lemma(Term t, const bool upper, const std::pair<cpp_int, long> a, const std::pair<cpp_int, long> bx2);
+    Term interpolation_lemma(Term t, const bool upper, const std::pair<cpp_int, long long> a, const std::pair<cpp_int, long long> bx2);
     void interpolation_lemma(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas);
     void interpolation_lemmas(std::unordered_map<Term, LemmaKind> &lemmas);
     TermVec tangent_refinement(const Term exponent1, const Term exponent2, const Term expected1, const Term expected2);

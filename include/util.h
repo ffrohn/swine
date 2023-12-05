@@ -8,6 +8,18 @@
 using namespace smt;
 using namespace boost::multiprecision;
 
+class ExponentOverflow: public std::out_of_range {
+
+    Term t;
+
+public:
+
+    ExponentOverflow(const Term t);
+
+    Term get_t() const;
+
+};
+
 class Util {
 
 public:
@@ -26,5 +38,8 @@ public:
     bool is_abstract_exp(const Term term) const;
     std::pair<Term, Term> decompose_exp(const Term term) const;
     Term make_exp(const Term base, const Term exponent);
+
+    static long long to_int(const cpp_int &i);
+    static long long to_int(const Term t);
 
 };

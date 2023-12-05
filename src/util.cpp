@@ -1,5 +1,7 @@
 #include "util.h"
 
+ExponentOverflow::ExponentOverflow(const Term t): std::out_of_range(""), t(t) {}
+
 Util::Util(const SmtSolver solver, const Config &config):
     config(config),
     solver(solver),
@@ -7,6 +9,10 @@ Util::Util(const SmtSolver solver, const Config &config):
     exp(solver->make_symbol("exp", solver->make_sort(SortKind::FUNCTION, {int_sort, int_sort, int_sort}))),
     True(solver->make_term(true)),
     False(solver->make_term(false)) {}
+
+Term ExponentOverflow::get_t() const {
+    return t;
+}
 
 cpp_int to_cpp_int(const std::string &s) {
     if (s.starts_with("(- ")) {
@@ -42,4 +48,12 @@ std::pair<Term, Term> Util::decompose_exp(const Term term) const {
 
 Term Util::make_exp(const Term base, const Term exponent) {
     return solver->make_term(Apply, exp, base, exponent);
+}
+
+long long Util::to_int(const Term t) {
+    try {
+        return stoll(to_cpp_int(t->to_string()).str());
+    } catch (const std::out_of_range &e) {
+        throw ExponentOverflow(t);
+    }
 }

@@ -3,6 +3,7 @@
 #include "brute_force.h"
 
 #include <assert.h>
+#include <limits>
 
 std::ostream& operator<<(std::ostream &s, const Swine::EvaluatedExponential &exp) {
     return s <<
@@ -84,7 +85,7 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
 }
 
 void Swine::symmetry_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
-    if (!config.is_active(LemmaKind::Symmetry) || config.eager_symmetry_lemmas) {
+    if (!config.is_active(LemmaKind::Symmetry)) {
         return;
     }
     TermVec sym_lemmas;
@@ -165,17 +166,6 @@ void Swine::exp_symmetry_lemmas(const Term e, TermVec &lemmas) {
             e,
             util.make_exp(base, make_term(Op(Negate), exp)))};
         lemmas.push_back(lemma);
-    }
-}
-
-void Swine::add_symmetry_lemmas(const ExpGroup &g) {
-    TermVec sym_lemmas;
-    for (const auto &e: g.all()) {
-        base_symmetry_lemmas(e, sym_lemmas);
-        exp_symmetry_lemmas(e, sym_lemmas);
-    }
-    for (const auto &l: sym_lemmas) {
-        add_lemma(l, LemmaKind::Symmetry);
     }
 }
 
@@ -288,38 +278,27 @@ void Swine::bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
 }
 
 void Swine::assert_formula(const Term & t) {
-    ++stats.num_assertions;
-    if (config.log) {
-        std::cout << "assertion:" << std::endl;
-        std::cout << t << std::endl;
-    }
-    const auto preprocessed {preproc.preprocess(t)};
-    if (config.validate || config.get_lemmas) {
-        frames.back().preprocessed_assertions.emplace(preprocessed, t);
-    }
-    util.solver->assert_formula(preprocessed);
-    for (const auto &g: exp_finder.find_exps(preprocessed)) {
-        if (frames.back().exps.insert(g.orig()).second) {
-            frames.back().exp_groups.push_back(g);
-            stats.non_constant_base |= !g.has_ground_base();
-            if (config.eager_symmetry_lemmas) {
-                add_symmetry_lemmas(g);
-            }
-            compute_bounding_lemmas(g);
+    try {
+        ++stats.num_assertions;
+        if (config.log) {
+            std::cout << "assertion:" << std::endl;
+            std::cout << t << std::endl;
         }
+        const auto preprocessed {preproc.preprocess(t)};
+        if (config.validate || config.get_lemmas) {
+            frames.back().preprocessed_assertions.emplace(preprocessed, t);
+        }
+        util.solver->assert_formula(preprocessed);
+        for (const auto &g: exp_finder.find_exps(preprocessed)) {
+            if (frames.back().exps.insert(g.orig()).second) {
+                frames.back().exp_groups.push_back(g);
+                stats.non_constant_base |= !g.has_ground_base();
+                compute_bounding_lemmas(g);
+            }
+        }
+    } catch (const ExponentOverflow &e) {
+        frames.back().assert_failed = true;
     }
-}
-
-long to_int(const std::string &s) {
-    if (s.starts_with("(- ")) {
-        return -to_int(s.substr(3, s.size() - 4));
-    } else {
-        return stol(s);
-    }
-}
-
-long to_int(const Term &t) {
-    return to_int(t->to_string());
 }
 
 std::optional<Swine::EvaluatedExponential> Swine::evaluate_exponential(const Term exp_expression) const {
@@ -332,7 +311,7 @@ std::optional<Swine::EvaluatedExponential> Swine::evaluate_exponential(const Ter
     res.base_val = util.value(get_value(*it));
     ++it;
     res.exponent = *it;
-    res.exponent_val = to_int(get_value(*it));
+    res.exponent_val = Util::to_int(get_value(*it));
     if (util.config.semantics == Semantics::Partial && res.exponent_val < 0) {
         return {};
     }
@@ -365,7 +344,7 @@ Swine::Interpolant Swine::interpolate(Term t, const unsigned pos, const cpp_int 
     return res;
 }
 
-Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_int, long> a, const std::pair<cpp_int, long> b) {
+Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_int, long long> a, const std::pair<cpp_int, long long> b) {
     const auto x1 {min(a.first, b.first)};
     const auto x2 {max(a.first, b.first)};
     const auto y1 {std::min(a.second, b.second)};
@@ -432,13 +411,13 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
 
 void Swine::interpolation_lemma(const EvaluatedExponential &e, std::unordered_map<Term, LemmaKind> &lemmas) {
     Term lemma;
-    auto &vec {interpolation_points.emplace(e.exp_expression, std::vector<std::pair<cpp_int, long>>()).first->second};
+    auto &vec {interpolation_points.emplace(e.exp_expression, std::vector<std::pair<cpp_int, long long>>()).first->second};
     if (e.exp_expression_val < e.expected_val) {
         const auto min_base = e.base_val > 1 ? e.base_val - 1 : e.base_val;
         const auto min_exp = e.exponent_val > 1 ? e.exponent_val - 1 : e.exponent_val;
         lemma = interpolation_lemma(e.exp_expression, false, {min_base, min_exp}, {min_base + 1, min_exp + 1});
     } else {
-        std::pair<cpp_int, long> nearest {1, 1};
+        std::pair<cpp_int, long long> nearest {1, 1};
         auto min_dist {e.base_val * e.base_val + e.exponent_val * e.exponent_val};
         for (const auto &[x, y]: vec) {
             const auto x_dist {x - e.base_val};
@@ -589,98 +568,118 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
 
 Result Swine::check_sat() {
     Result res;
+    for (const auto &f: frames) {
+        if (f.assert_failed) {
+            res = Result(ResultType::UNKNOWN, "assert failed");
+            return res;
+        }
+    }
     while (true) {
-        ++stats.iterations;
-        if (config.get_lemmas) {
+        try {
             TermVec assumptions;
+            ++stats.iterations;
             for (const auto &f: frames) {
-                for (const auto &[a,_]: f.assumptions) {
-                    assumptions.push_back(a);
+                if (config.get_lemmas) {
+                    for (const auto &[a,_]: f.assumptions) {
+                        assumptions.push_back(a);
+                    }
                 }
             }
-            res = util.solver->check_sat_assuming(assumptions);
-        } else {
-            res = util.solver->check_sat();
-        }
-        if (res.is_unsat()) {
-            if (config.validate) {
-                brute_force();
+            if (!assumptions.empty()) {
+                res = util.solver->check_sat_assuming(assumptions);
+            } else {
+                res = util.solver->check_sat();
             }
-            if (config.get_lemmas) {
-                UnorderedTermSet core;
-                util.solver->get_unsat_assumptions(core);
-                std::cout << "===== lemmas =====" << std::endl;
-                for (const auto &k: lemma_kind::values) {
-                    auto first {true};
-                    for (const auto &f: frames) {
-                        for (const auto &[a,l]: f.assumptions) {
-                            if (core.contains(a) && f.lemmas.at(l) == k) {
-                                if (first) {
-                                    std::cout << "----- " << k << " lemmas -----" << std::endl;
-                                    first = false;
+            if (res.is_unsat()) {
+                if (config.get_lemmas) {
+                    UnorderedTermSet core;
+                    util.solver->get_unsat_assumptions(core);
+                    std::cout << "===== lemmas =====" << std::endl;
+                    for (const auto &k: lemma_kind::values) {
+                        auto first {true};
+                        for (const auto &f: frames) {
+                            for (const auto &[a,l]: f.assumptions) {
+                                if (core.contains(a) && f.lemmas.at(l) == k) {
+                                    if (first) {
+                                        std::cout << "----- " << k << " lemmas -----" << std::endl;
+                                        first = false;
+                                    }
+                                    std::cout << l << std::endl;
                                 }
-                                std::cout << l << std::endl;
                             }
                         }
                     }
                 }
-            }
-            break;
-        } else if (res.is_unknown()) {
-            break;
-        } else if (res.is_sat()) {
-            bool sat {true};
-            if (config.log) {
-                std::cout << "candidate model:" << std::endl;
-                for (const auto &[key,val]: get_model()) {
-                    std::cout << key << " = " << val << std::endl;
-                }
-            }
-            std::unordered_map<Term, LemmaKind> lemmas;
-            // check if the model can be lifted
-            for (const auto &f: frames) {
-                for (const auto &e: f.exps) {
-                    const auto ee {evaluate_exponential(e)};
-                    if (ee && ee->exp_expression_val != ee->expected_val) {
-                        sat = false;
+                for (const auto &f: frames) {
+                    if (f.has_overflow) {
+                        res = Result(ResultType::UNKNOWN, "overflow");
                         break;
                     }
                 }
-                if (!sat) {
-                    break;
-                }
-            }
-            if (sat) {
                 if (config.validate) {
-                    verify();
+                    brute_force();
                 }
                 break;
-            }
-            if (lemmas.empty()) {
-                symmetry_lemmas(lemmas);
-            }
-            if (lemmas.empty()) {
-                bounding_lemmas(lemmas);
-            }
-            if (lemmas.empty()) {
-                monotonicity_lemmas(lemmas);
-            }
-            if (lemmas.empty()) {
-                mod_lemmas(lemmas);
-            }
-            if (lemmas.empty()) {
-                interpolation_lemmas(lemmas);
-            }
-            if (lemmas.empty()) {
-                if (config.is_active(LemmaKind::Interpolation)) {
-                    throw std::logic_error("refinement failed, but interpolation is enabled");
-                } else {
-                    return Result(ResultType::UNKNOWN, "Refinement failed, please activate interpolation lemmas.");
+            } else if (res.is_unknown()) {
+                break;
+            } else if (res.is_sat()) {
+                bool sat {true};
+                if (config.log) {
+                    std::cout << "candidate model:" << std::endl;
+                    for (const auto &[key,val]: get_model()) {
+                        std::cout << key << " = " << val << std::endl;
+                    }
+                }
+                std::unordered_map<Term, LemmaKind> lemmas;
+                // check if the model can be lifted
+                for (const auto &f: frames) {
+                    for (const auto &e: f.exps) {
+                        const auto ee {evaluate_exponential(e)};
+                        if (ee && ee->exp_expression_val != ee->expected_val) {
+                            sat = false;
+                            break;
+                        }
+                    }
+                    if (!sat) {
+                        break;
+                    }
+                }
+                if (sat) {
+                    if (config.validate) {
+                        verify();
+                    }
+                    break;
+                }
+                if (lemmas.empty()) {
+                    symmetry_lemmas(lemmas);
+                }
+                if (lemmas.empty()) {
+                    bounding_lemmas(lemmas);
+                }
+                if (lemmas.empty()) {
+                    monotonicity_lemmas(lemmas);
+                }
+                if (lemmas.empty()) {
+                    mod_lemmas(lemmas);
+                }
+                if (lemmas.empty()) {
+                    interpolation_lemmas(lemmas);
+                }
+                if (lemmas.empty()) {
+                    if (config.is_active(LemmaKind::Interpolation)) {
+                        throw std::logic_error("refinement failed, but interpolation is enabled");
+                    } else {
+                        return Result(ResultType::UNKNOWN, "Refinement failed, please activate interpolation lemmas.");
+                    }
+                }
+                for (const auto &[l, kind]: lemmas) {
+                    add_lemma(l, kind);
                 }
             }
-            for (const auto &[l, kind]: lemmas) {
-                add_lemma(l, kind);
-            }
+        } catch (const ExponentOverflow &e) {
+            frames.back().has_overflow = true;
+            util.solver->assert_formula(util.solver->make_term(Ge, e.get_t(), util.term(std::numeric_limits<long long>::min())));
+            util.solver->assert_formula(util.solver->make_term(Le, e.get_t(), util.term(std::numeric_limits<long long>::max())));
         }
     }
     if (config.statistics) {

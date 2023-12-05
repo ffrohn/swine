@@ -166,7 +166,7 @@ Term ConstantPropagator::propagate(Term expression) const {
                 throw std::invalid_argument("Pow must have exactly two arguments.");
             }
             if (ground) {
-                return util.term(pow(util.value(children.at(0)), stol(util.value(children.at(1)).str())));
+                return util.term(pow(util.value(children.at(0)), Util::to_int(children.at(1))));
             } else if (children.at(0) == util.term(1) || children.at(1) == util.term(0)) {
                 return util.term(1);
             } else if (children.at(1) == util.term(1)) {
@@ -179,7 +179,7 @@ Term ConstantPropagator::propagate(Term expression) const {
                 if (children.at(1)->is_value() && children.at(2)->is_value()) {
                     const auto exponent {util.value(children.at(2))};
                     if (exponent >= 0 || util.config.semantics == Semantics::Total) {
-                        return util.term(pow(util.value(children.at(1)), abs(stol(exponent.str()))));
+                        return util.term(pow(util.value(children.at(1)), abs(Util::to_int(children.at(2)))));
                     }
                 }
             }
