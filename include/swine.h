@@ -70,6 +70,8 @@ private:
     std::unordered_map<Term, std::vector<std::pair<cpp_int, long long>>> interpolation_points;
     const Config &config;
 
+    Result check_sat(TermVec assumptions);
+
 public:
 
     Swine(const SmtSolver solver, const Config &config);

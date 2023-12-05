@@ -266,7 +266,7 @@ void Swine::bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
                 const auto ee {evaluate_exponential(e)};
                 if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
                     for (const auto &l: f.bounding_lemmas.at(e)) {
-                        if (get_value(l) != util.True) {
+                        if (util.solver->get_value(l) != util.True) {
                             lemmas.emplace(l, LemmaKind::Bounding);
                             break;
                         }
@@ -304,14 +304,14 @@ void Swine::assert_formula(const Term & t) {
 std::optional<Swine::EvaluatedExponential> Swine::evaluate_exponential(const Term exp_expression) const {
     EvaluatedExponential res;
     res.exp_expression = exp_expression;
-    res.exp_expression_val = util.value(get_value(exp_expression));
+    res.exp_expression_val = util.value(util.solver->get_value(exp_expression));
     auto it {exp_expression->begin()};
     ++it;
     res.base = *it;
-    res.base_val = util.value(get_value(*it));
+    res.base_val = util.value(util.solver->get_value(*it));
     ++it;
     res.exponent = *it;
-    res.exponent_val = Util::to_int(get_value(*it));
+    res.exponent_val = Util::to_int(util.solver->get_value(*it));
     if (util.config.semantics == Semantics::Partial && res.exponent_val < 0) {
         return {};
     }
@@ -566,7 +566,7 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     }
 }
 
-Result Swine::check_sat() {
+Result Swine::check_sat(TermVec assumptions) {
     Result res;
     for (const auto &f: frames) {
         if (f.assert_failed) {
@@ -576,10 +576,9 @@ Result Swine::check_sat() {
     }
     while (true) {
         try {
-            TermVec assumptions;
             ++stats.iterations;
-            for (const auto &f: frames) {
-                if (config.get_lemmas) {
+            if (config.get_lemmas) {
+                for (const auto &f: frames) {
                     for (const auto &[a,_]: f.assumptions) {
                         assumptions.push_back(a);
                     }
@@ -688,19 +687,20 @@ Result Swine::check_sat() {
     return res;
 }
 
-// TODO
+Result Swine::check_sat() {
+    return check_sat({});
+}
+
 Result Swine::check_sat_assuming(const TermVec & assumptions) {
-    return util.solver->check_sat_assuming(assumptions);
+    return check_sat(assumptions);
 }
 
-// TODO
 Result Swine::check_sat_assuming_list(const TermList & assumptions) {
-    return util.solver->check_sat_assuming_list(assumptions);
+    return check_sat(TermVec(assumptions.begin(), assumptions.end()));
 }
 
-// TODO
 Result Swine::check_sat_assuming_set(const UnorderedTermSet & assumptions) {
-    return util.solver->check_sat_assuming_set(assumptions);
+    return check_sat(TermVec(assumptions.begin(), assumptions.end()));
 }
 
 void Swine::push(uint64_t num) {
@@ -721,9 +721,8 @@ uint64_t Swine::get_context_level() const {
     return util.solver->get_context_level();
 }
 
-// TODO
 Term Swine::get_value(const Term & t) const {
-    return util.solver->get_value(t);
+    return eval.evaluate(t);
 }
 
 UnorderedTermMap Swine::get_model() const {
@@ -746,13 +745,13 @@ UnorderedTermMap Swine::get_model() const {
                 uf = true;
                 std::cerr << "get_model does not support uninterpreted functions at the moment" << std::endl;
             } else {
-                res.emplace(x, get_value(x));
+                res.emplace(x, util.solver->get_value(x));
             }
         }
         if (config.debug) {
             for (const auto &g: f.exp_groups) {
                 for (const auto &e: g.all()) {
-                    res.emplace(e, get_value(e));
+                    res.emplace(e, util.solver->get_value(e));
                 }
             }
         }
@@ -765,9 +764,15 @@ UnorderedTermMap Swine::get_array_values(const Term & arr,
     return util.solver->get_array_values(arr, out_const_base);
 }
 
-// TODO
 void Swine::get_unsat_assumptions(UnorderedTermSet & out) {
     util.solver->get_unsat_assumptions(out);
+    if (config.get_lemmas) {
+        for (const auto &f: frames) {
+            for (const auto &[a,_]: f.assumptions) {
+                out.erase(a);
+            }
+        }
+    }
 }
 
 Sort Swine::make_sort(const std::string name, uint64_t arity) const {
@@ -991,7 +996,7 @@ void Swine::brute_force() {
         }
         for (const auto &f: frames) {
             for (const auto &[l, kind]: f.lemmas) {
-                if (get_value(l) != util.True) {
+                if (util.solver->get_value(l) != util.True) {
                     std::cout << "violated " << kind << " lemma" << std::endl;
                     std::cout << l << std::endl;
                 }
