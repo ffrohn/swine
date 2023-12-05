@@ -14,8 +14,6 @@ class BruteForce {
     unsigned long bound {0};
     std::vector<std::pair<Term, unsigned long>> current;
 
-    static const unsigned int max_bound {10};
-
     bool next();
     bool next(const unsigned long weight, std::vector<std::pair<Term, unsigned long>>::iterator begin);
 

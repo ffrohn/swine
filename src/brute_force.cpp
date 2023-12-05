@@ -27,7 +27,7 @@ bool BruteForce::next(const unsigned long weight, std::vector<std::pair<Term, un
 
 bool BruteForce::next() {
     if (!next(bound, current.begin())) {
-        if (bound == max_bound) {
+        if (bound == *util.config.validate_unsat) {
             return false;
         }
         ++bound;

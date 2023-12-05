@@ -59,7 +59,7 @@ void Swine::add_lemma(const Term t, const LemmaKind kind) {
         std::cout << t << std::endl;
     }
     const auto pp {preproc.preprocess(t)};
-    if (config.validate || config.get_lemmas) frames.back().lemmas.emplace(pp, kind);
+    if (config.validate_unsat || config.get_lemmas) frames.back().lemmas.emplace(pp, kind);
     if (config.get_lemmas) {
         static unsigned int count {0};
         const auto assumption {make_symbol("assumption_" + std::to_string(count), util.solver->make_sort(BOOL))};
@@ -285,7 +285,7 @@ void Swine::assert_formula(const Term & t) {
             std::cout << t << std::endl;
         }
         const auto preprocessed {preproc.preprocess(t)};
-        if (config.validate || config.get_lemmas) {
+        if (config.validate_sat || config.validate_unsat || config.get_lemmas) {
             frames.back().preprocessed_assertions.emplace(preprocessed, t);
         }
         util.solver->assert_formula(preprocessed);
@@ -616,7 +616,7 @@ Result Swine::check_sat() {
                         break;
                     }
                 }
-                if (config.validate) {
+                if (config.validate_unsat) {
                     brute_force();
                 }
                 break;
@@ -645,7 +645,7 @@ Result Swine::check_sat() {
                     }
                 }
                 if (sat) {
-                    if (config.validate) {
+                    if (config.validate_sat) {
                         verify();
                     }
                     break;
@@ -688,14 +688,17 @@ Result Swine::check_sat() {
     return res;
 }
 
+// TODO
 Result Swine::check_sat_assuming(const TermVec & assumptions) {
     return util.solver->check_sat_assuming(assumptions);
 }
 
+// TODO
 Result Swine::check_sat_assuming_list(const TermList & assumptions) {
     return util.solver->check_sat_assuming_list(assumptions);
 }
 
+// TODO
 Result Swine::check_sat_assuming_set(const UnorderedTermSet & assumptions) {
     return util.solver->check_sat_assuming_set(assumptions);
 }
@@ -718,6 +721,7 @@ uint64_t Swine::get_context_level() const {
     return util.solver->get_context_level();
 }
 
+// TODO
 Term Swine::get_value(const Term & t) const {
     return util.solver->get_value(t);
 }
@@ -745,9 +749,11 @@ UnorderedTermMap Swine::get_model() const {
                 res.emplace(x, get_value(x));
             }
         }
-        for (const auto &g: f.exp_groups) {
-            for (const auto &e: g.all()) {
-                res.emplace(e, get_value(e));
+        if (config.debug) {
+            for (const auto &g: f.exp_groups) {
+                for (const auto &e: g.all()) {
+                    res.emplace(e, get_value(e));
+                }
             }
         }
     }
@@ -759,6 +765,7 @@ UnorderedTermMap Swine::get_array_values(const Term & arr,
     return util.solver->get_array_values(arr, out_const_base);
 }
 
+// TODO
 void Swine::get_unsat_assumptions(UnorderedTermSet & out) {
     util.solver->get_unsat_assumptions(out);
 }
@@ -939,6 +946,7 @@ Term Swine::substitute(const Term term,
     return util.solver->substitute(term, substitution_map);
 }
 
+// TODO
 void Swine::dump_smt2(std::string filename) const {
     util.solver->dump_smt2(filename);
 }

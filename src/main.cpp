@@ -14,6 +14,33 @@ void argument_parsing_failed(const std::string &str) {
     throw std::invalid_argument("extra argument " + str);
 }
 
+void print_help() {
+    const auto length {std::string("  --semantics [total|partial]").length()};
+    std::cout << "***** SwInE -- SMT with Integer Exponentiation *****" << std::endl;
+    std::cout << "usage: swine [args] input.smt2" << std::endl;
+    std::cout << "valid arguments:" << std::endl;
+    std::cout << "  --solver [z3|cvc5]          : choose the backend SMT solver (default: z3)" << std::endl;
+    std::cout << "  --semantics [total|partial] : choose the semantics that should be considered for exp (default: total)" << std::endl;
+    for (const auto k: lemma_kind::values) {
+        const auto str {std::string("  --no-") + lemma_kind::str(k) + " lemmas"};
+        const auto ws {length - str.length()};
+        std::cout << str << std::string(ws, ' ') << " : disable " << k << " lemmas" << std::endl;
+    }
+    for (const auto k: preproc_kind::values) {
+        const auto str {std::string("  --no-") + preproc_kind::str(k)};
+        const auto ws {length - str.length()};
+        std::cout << str << std::string(ws, ' ') << " : disable " << k << std::endl;
+    }
+    std::cout << "  --validate-sat              : validate SAT results by evaluating the input w.r.t. solution" << std::endl;
+    std::cout << "  --validate-unsat c          : validate UNSAT results by forcing exponents to values in {0,...,c}, c in IN" << std::endl;
+    std::cout << "  --get-lemmas                : print all lemmas that were used in the final proof if UNSAT is proven" << std::endl;
+    std::cout << "  --stats                     : print statistics in the end" << std::endl;
+    std::cout << "  --help                      : print this text and exit" << std::endl;
+    std::cout << "  --version                   : print the SwInE version and exit" << std::endl;
+    std::cout << "  --no-version                : omit the SwInE version at the end of the output" << std::endl;
+    std::cout << "  --log                       : enable logging" << std::endl;
+}
+
 int main(int argc, char *argv[]) {
     int arg = 0;
     auto get_next = [&]() {
@@ -37,8 +64,13 @@ int main(int argc, char *argv[]) {
             } else {
                 throw std::invalid_argument("unknown solver " + str);
             }
-        } else if (boost::iequals(argv[arg], "--validate")) {
-            config.validate = true;
+        } else if (boost::iequals(argv[arg], "--validate-sat")) {
+            config.validate_sat = true;
+        } else if (boost::iequals(argv[arg], "--validate-unsat")) {
+            const auto bound {std::stoi(get_next())};
+            if (bound >= 0) {
+                config.validate_unsat = bound;
+            }
         } else if (boost::iequals(argv[arg], "--get-lemmas")) {
             config.get_lemmas = true;
         } else if (boost::iequals(argv[arg], "--log")) {
@@ -47,6 +79,9 @@ int main(int argc, char *argv[]) {
             config.statistics = true;
         } else if (boost::iequals(argv[arg], "--version")) {
             version();
+            return 0;
+        } else if (boost::iequals(argv[arg], "--help")) {
+            print_help();
             return 0;
         } else if (boost::iequals(argv[arg], "--no-version")) {
             show_version = false;
