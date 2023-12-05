@@ -3,15 +3,15 @@
 #include <smt-switch/solver.h>
 #include <boost/multiprecision/cpp_int.hpp>
 
-#include "preprocessor.h"
-#include "exp_finder.h"
 #include "config.h"
-#include "term_evaluator.h"
 
 using namespace smt;
 using namespace boost::multiprecision;
 
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind);
+
+class ExpGroup;
+class Util;
 
 class Swine: public AbsSmtSolver {
 
@@ -19,7 +19,7 @@ private:
 
     struct Frame {
         UnorderedTermSet exps;
-        std::vector<ExpGroup> exp_groups;
+        std::vector<std::shared_ptr<ExpGroup>> exp_groups;
         UnorderedTermSet symbols;
         // mapping from assumption literals to the corresponding formulas for unsat cores
         UnorderedTermMap assumptions;
@@ -62,13 +62,11 @@ private:
     };
 
     Statistics stats;
-    Util util;
-    Preprocessor preproc;
-    ExpFinder exp_finder;
-    TermEvaluator eval;
+    std::unique_ptr<Util> util;
     std::vector<Frame> frames;
     std::unordered_map<Term, std::vector<std::pair<cpp_int, long long>>> interpolation_points;
     const Config &config;
+    SmtSolver solver;
 
     Result check_sat(TermVec assumptions);
 
@@ -77,7 +75,7 @@ public:
     Swine(const SmtSolver solver, const Config &config);
     Swine(const Swine &) = delete;
     Swine & operator=(const Swine &) = delete;
-    ~Swine(){};
+    ~Swine();
     void set_opt(const std::string option, const std::string value) override;
     void set_logic(const std::string logic) override;
     void assert_formula(const Term & t) override;

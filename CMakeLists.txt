@@ -50,7 +50,7 @@ message(STATUS "gmp: ${GMP}")
 
 add_executable(${EXECUTABLE} "")
 
-target_sources(${EXECUTABLE} PRIVATE
+set (SOURCES
     "${PROJECT_SOURCE_DIR}/include/swine.h"
     "${PROJECT_SOURCE_DIR}/src/swine.cpp"
     "${PROJECT_SOURCE_DIR}/src/term_evaluator.cpp"
@@ -76,6 +76,12 @@ target_sources(${EXECUTABLE} PRIVATE
     "${PROJECT_SOURCE_DIR}/include/version.h"
     "${PROJECT_SOURCE_DIR}/src/version.cpp"
 )
+
+target_sources(${EXECUTABLE} PRIVATE ${SOURCES})
+
+add_library(libswine STATIC ${SOURCES})
+
+set_property(TARGET libswine PROPERTY OUTPUT_NAME swine)
 
 include_directories(${INCLUDE_DIRS})
 

@@ -4,11 +4,11 @@
 
 class TermEvaluator {
 
-    Util &util;
+    const Util &util;
 
 public:
 
-    TermEvaluator(Util &util);
+    TermEvaluator(const Util &util);
 
     Term evaluate(Term expression) const;
 

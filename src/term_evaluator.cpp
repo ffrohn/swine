@@ -2,7 +2,7 @@
 
 #include <boost/algorithm/string.hpp>
 
-TermEvaluator::TermEvaluator(Util &util): util(util) {}
+TermEvaluator::TermEvaluator(const Util &util): util(util) {}
 
 Term TermEvaluator::evaluate(Term expression) const {
     if (!util.is_app(expression)) {

@@ -20,7 +20,7 @@ void print_help() {
     std::cout << "usage: swine [args] input.smt2" << std::endl;
     std::cout << "valid arguments:" << std::endl;
     std::cout << "  --solver [z3|cvc5]          : choose the backend SMT solver (default: z3)" << std::endl;
-    std::cout << "  --semantics [total|partial] : choose the semantics that should be considered for exp (default: total)" << std::endl;
+    std::cout << "  --semantics [total|partial] : choose the semantics for exp  (default: total)" << std::endl;
     for (const auto k: lemma_kind::values) {
         const auto str {std::string("  --no-") + lemma_kind::str(k) + " lemmas"};
         const auto ws {length - str.length()};
