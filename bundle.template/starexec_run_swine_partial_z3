@@ -1,0 +1,3 @@
+#!/bin/bash
+trap "" SIGRTMIN
+./swine --semantics partial --solver z3 $1 2> /dev/null
