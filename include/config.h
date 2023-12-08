@@ -24,7 +24,7 @@ struct Config {
     bool get_lemmas {false};
     unsigned int rewrite_threshold {10};
     SolverKind solver_kind {SolverKind::Z3};
-    Semantics semantics {Semantics::Partial};
+    Semantics semantics {Semantics::Total};
     std::unordered_set<LemmaKind> active_lemma_kinds {lemma_kind::values};
     std::unordered_set<PreprocKind> active_preprocessings{preproc_kind::values};
 
