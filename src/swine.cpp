@@ -522,7 +522,7 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
         for (const auto &g: f.exp_groups) {
             for (const auto &e: g->maybe_non_neg_base()) {
                 const auto [base, exp] {util->decompose_exp(e)};
-                if (util->value(get_value(base)) > 0 && util->value(get_value(exp)) >= 0) {
+                if (util->value(solver->get_value(base)) > 0 && util->value(solver->get_value(exp)) >= 0) {
                     exps.push_back(e);
                 }
             }
