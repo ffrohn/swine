@@ -70,14 +70,18 @@ set (SOURCES
     "${PROJECT_SOURCE_DIR}/include/preproc_kind.h"
     "${PROJECT_SOURCE_DIR}/src/preproc_kind.cpp"
     "${PROJECT_SOURCE_DIR}/include/config.h"
+)
+
+add_library(objlib OBJECT ${SOURCES})
+
+target_sources(${EXECUTABLE} PRIVATE
+    $<TARGET_OBJECTS:objlib>
     "${PROJECT_SOURCE_DIR}/src/main.cpp"
     "${PROJECT_SOURCE_DIR}/include/version.h"
     "${PROJECT_SOURCE_DIR}/src/version.cpp"
 )
 
-target_sources(${EXECUTABLE} PRIVATE ${SOURCES})
-
-add_library(libswine STATIC ${SOURCES})
+add_library(libswine STATIC $<TARGET_OBJECTS:objlib>)
 
 set_property(TARGET libswine PROPERTY OUTPUT_NAME swine)
 
