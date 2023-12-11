@@ -9,6 +9,11 @@
 #include <assert.h>
 #include <limits>
 
+namespace swine {
+
+using namespace smt;
+using namespace boost::multiprecision;
+
 std::ostream& operator<<(std::ostream &s, const Swine::EvaluatedExponential &exp) {
     return s <<
            "abstract: exp(" <<
@@ -37,8 +42,8 @@ std::ostream& operator<<(std::ostream &s, const Swine::Statistics &stats) {
 
 Swine::Swine(const SmtSolver solver, const Config &config):
     AbsSmtSolver(solver->get_solver_enum()),
-    util(std::make_unique<Util>(solver, config)),
     config(config),
+    util(std::make_unique<Util>(solver, this->config)),
     solver(solver) {
     solver->set_opt("produce-models", "true");
     if (config.get_lemmas) {
@@ -744,19 +749,19 @@ UnorderedTermMap Swine::get_model() const {
             }
         }
     }
-    for (const auto &f: frames) {
-        for (const auto &x: f.symbols) {
-            if (assumptions.contains(x)) {
-                continue;
-            }
-            if (!uf && x->get_sort()->get_sort_kind() == SortKind::FUNCTION) {
-                uf = true;
-                std::cerr << "get_model does not support uninterpreted functions at the moment" << std::endl;
-            } else {
-                res.emplace(x, solver->get_value(x));
-            }
+    for (const auto &x: symbols) {
+        if (assumptions.contains(x)) {
+            continue;
         }
-        if (config.debug) {
+        if (!uf && x->get_sort()->get_sort_kind() == SortKind::FUNCTION) {
+            uf = true;
+            std::cerr << "get_model does not support uninterpreted functions at the moment" << std::endl;
+        } else {
+            res.emplace(x, solver->get_value(x));
+        }
+    }
+    if (config.debug) {
+        for (const auto &f: frames) {
             for (const auto &g: f.exp_groups) {
                 for (const auto &e: g->all()) {
                     res.emplace(e, solver->get_value(e));
@@ -883,7 +888,7 @@ Term Swine::make_term(const Term & val, const Sort & sort) const {
 
 Term Swine::make_symbol(const std::string name, const Sort & sort) {
     const auto res {solver->make_symbol(name, sort)};
-    frames.back().symbols.insert(res);
+    symbols.insert(res);
     return res;
 }
 
@@ -915,14 +920,6 @@ Term Swine::make_term(Op op, const TermVec & terms) const {
         return solver->make_term(Apply, util->exp, terms.front(), *(++terms.begin()));
     } else if (config.solver_kind == SolverKind::Z3 && terms.size() > 2) {
         switch (op.prim_op) {
-        case Mult: {
-            auto it {terms.begin()};
-            auto res {*it};
-            while (++it != terms.end()) {
-                res = solver->make_term(op, res, *it);
-            }
-            return res;
-        }
         case Le:
         case Lt:
         case Ge:
@@ -1012,4 +1009,6 @@ void Swine::brute_force() {
         }
         verify();
     }
+}
+
 }

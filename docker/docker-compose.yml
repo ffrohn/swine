@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  qtcreator:
+  qtcreator-swine:
     image: qtcreator-swine:latest
     container_name: qtcreator-swine
     security_opt: [seccomp:unconfined]
@@ -13,5 +13,5 @@ services:
       - DISPLAY=${DISPLAY}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - .:/swine
+      - ..:/swine
     network_mode: host

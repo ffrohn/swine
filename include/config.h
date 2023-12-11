@@ -5,6 +5,8 @@
 
 #include <unordered_set>
 
+namespace swine {
+
 enum class SolverKind {
     Z3, CVC5
 };
@@ -45,3 +47,5 @@ struct Config {
     }
 
 };
+
+}

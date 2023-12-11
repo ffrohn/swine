@@ -2,6 +2,8 @@
 
 #include "util.h"
 
+namespace swine {
+
 class Rewriter {
 
     Util &util;
@@ -13,3 +15,5 @@ public:
     Term rewrite(Term t);
 
 };
+
+}

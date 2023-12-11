@@ -1,4 +1,8 @@
 #include "version.h"
 
+namespace swine {
+
 const std::string Version::GIT_SHA = "@SHA@";
 const std::string Version::GIT_DIRTY = "@DIRTY@";
+
+}

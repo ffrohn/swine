@@ -6,6 +6,9 @@
 #include <smt-switch/smtlib_reader.h>
 #include <boost/algorithm/string.hpp>
 
+using namespace swine;
+using namespace smt;
+
 void version() {
     std::cout << "Build SHA: " << Version::GIT_SHA << " (" << Version::GIT_DIRTY << ")" << std::endl;
 }

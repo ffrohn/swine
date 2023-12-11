@@ -1,5 +1,7 @@
 #include "preprocessor.h"
 
+namespace swine {
+
 Preprocessor::Preprocessor(Util &util): util(util), rewriter(util), constant_propagator(util) {}
 
 Term Preprocessor::preprocess(Term term) {
@@ -58,4 +60,6 @@ Term Preprocessor::preprocess(Term term) {
         }
     }
     return res;
+}
+
 }

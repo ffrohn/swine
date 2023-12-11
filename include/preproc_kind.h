@@ -4,6 +4,8 @@
 #include <optional>
 #include <unordered_set>
 
+namespace swine {
+
 enum class PreprocKind {
     ConstantFolding, Rewriting
 };
@@ -18,3 +20,5 @@ std::string str(const PreprocKind k);
 }
 
 std::ostream& operator<<(std::ostream &s, const PreprocKind kind);
+
+}

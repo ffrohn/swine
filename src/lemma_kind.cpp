@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <boost/algorithm/string.hpp>
 
+namespace swine {
+
 std::string lemma_kind::str(const LemmaKind k) {
     switch (k) {
     case LemmaKind::Symmetry: return "symmetry";
@@ -16,4 +18,6 @@ std::string lemma_kind::str(const LemmaKind k) {
 
 std::ostream& operator<<(std::ostream &s, const LemmaKind kind) {
     return s << lemma_kind::str(kind);
+}
+
 }

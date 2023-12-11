@@ -2,6 +2,8 @@
 
 #include "util.h"
 
+namespace swine {
+
 class ExpGroup {
 
     const Term t;
@@ -36,3 +38,5 @@ public:
     std::vector<ExpGroup> find_exps(Term term);
 
 };
+
+}

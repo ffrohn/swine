@@ -1,5 +1,7 @@
 #include "exp_finder.h"
 
+namespace swine {
+
 ExpGroup::ExpGroup(Term t, Util &util):
     t(t),
     util(util),
@@ -58,4 +60,6 @@ std::vector<ExpGroup> ExpFinder::find_exps(Term term) {
         groups.emplace_back(t, util);
     }
     return groups;
+}
+
 }

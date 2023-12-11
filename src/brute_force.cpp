@@ -3,6 +3,8 @@
 #include <smt-switch/cvc5_factory.h>
 #include <smt-switch/solver.h>
 
+namespace swine {
+
 BruteForce::BruteForce(Util &util, const smt::TermVec &assertions, const smt::TermVec &exps): util(util), assertions(assertions), exps(exps) {
     util.solver->reset_assertions();
 }
@@ -82,4 +84,6 @@ bool BruteForce::check_sat() {
         util.solver->pop();
     } while (next());
     return false;
+}
+
 }

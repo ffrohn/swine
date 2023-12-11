@@ -5,6 +5,8 @@
 #include <smt-switch/term.h>
 #include <map>
 
+namespace swine {
+
 using namespace smt;
 
 class BruteForce {
@@ -23,3 +25,5 @@ public:
     bool check_sat();
 
 };
+
+}

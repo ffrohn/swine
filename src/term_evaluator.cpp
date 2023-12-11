@@ -2,6 +2,8 @@
 
 #include <boost/algorithm/string.hpp>
 
+namespace swine {
+
 TermEvaluator::TermEvaluator(const Util &util): util(util) {}
 
 Term TermEvaluator::evaluate(Term expression) const {
@@ -23,4 +25,6 @@ Term TermEvaluator::evaluate(Term expression) const {
         }
         return util.solver->get_value(util.solver->make_term(expression->get_op(), children));
     }
+}
+
 }

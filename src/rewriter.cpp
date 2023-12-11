@@ -1,5 +1,7 @@
 #include "rewriter.h"
 
+namespace swine {
+
 Rewriter::Rewriter(Util &util): util(util) {}
 
 Term Rewriter::rewrite(Term t) {
@@ -29,7 +31,7 @@ Term Rewriter::rewrite(Term t) {
                         return res;
                     }
                 } else {
-                    res = util.solver->make_term(Pow, base, util.term(abs(util.value(exp))));
+                res = util.solver->make_term(Pow, base, util.term(abs(util.value(exp))));
                 }
             } else if (util.is_abstract_exp(base) && util.config.semantics == Semantics::Total) {
                 const auto [inner_base, inner_exp] {util.decompose_exp(base)};
@@ -89,4 +91,6 @@ Term Rewriter::rewrite(Term t) {
         }
         return res;
     }
+}
+
 }

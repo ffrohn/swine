@@ -5,6 +5,8 @@
 
 #include "config.h"
 
+namespace swine {
+
 using namespace smt;
 using namespace boost::multiprecision;
 
@@ -43,3 +45,5 @@ public:
     static long long to_int(const Term t);
 
 };
+
+}

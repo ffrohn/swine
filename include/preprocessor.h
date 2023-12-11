@@ -3,6 +3,8 @@
 #include "rewriter.h"
 #include "constant_propagator.h"
 
+namespace swine {
+
 class Preprocessor {
 
     Util &util;
@@ -16,3 +18,5 @@ public:
     Term preprocess(Term term);
 
 };
+
+}

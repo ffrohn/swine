@@ -1,5 +1,7 @@
 #include "util.h"
 
+namespace swine {
+
 ExponentOverflow::ExponentOverflow(const Term t): std::out_of_range(""), t(t) {}
 
 Util::Util(const SmtSolver solver, const Config &config):
@@ -56,4 +58,6 @@ long long Util::to_int(const Term t) {
     } catch (const std::out_of_range &e) {
         throw ExponentOverflow(t);
     }
+}
+
 }

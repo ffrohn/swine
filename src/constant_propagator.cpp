@@ -1,5 +1,7 @@
 #include "constant_propagator.h"
 
+namespace swine {
+
 struct RelOp {
 
     PrimOp op;
@@ -249,4 +251,6 @@ Term ConstantPropagator::propagate(Term expression) const {
         }
         return util.solver->make_term(op, children);
     }
+}
+
 }
