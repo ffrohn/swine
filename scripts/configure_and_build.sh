@@ -12,4 +12,12 @@ make -j
 
 cd /swine
 
-/swine/scripts/repack-static-lib.sh libswine.a /swine/build-debug/libswine.a /usr/local/lib/libz3.a /usr/local/lib/libpoly.a /usr/local/lib/libpolyxx.a /usr/local/lib/libcudd.a /usr/local/lib/libyices.a /usr/local/lib/libsmt-switch*
+/swine/scripts/repack-static-lib.sh\
+    libswine.a\
+    /swine/build-debug/libswine.a\
+    /usr/local/lib/libz3.a\
+    /usr/local/lib/libpoly.a\
+    /usr/local/lib/libpolyxx.a\
+    /usr/local/lib/libsmt-switch*
+    # /usr/local/lib/libcudd.a
+    # /usr/local/lib/libyices.a
