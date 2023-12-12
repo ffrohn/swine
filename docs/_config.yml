@@ -1,0 +1,6 @@
+title: SwInE
+email: florian.frohn@cs.rwth-aachen.de
+description: >- # this means to ignore newlines until "baseurl:"
+  SwInE (**S**MT **w**ith **In**teger **E**xponentiation) is an SMT solver for with support for integer exponentiation.
+github_username:  ffrohn
+theme: jekyll-theme-cayman
