@@ -370,20 +370,13 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
     const auto y2 {std::max(a.second, b.second)};
     const auto [base, exp] {util->decompose_exp(t)};
     const auto op = upper ? Le : Ge;
-    const auto gey {make_term(Le, util->term(y1), exp, util->term(y2))};
-    auto ley {make_term(Gt, exp, util->term(0))};
-    if (y2 > y1 + 1) {
-        ley = make_term(
-            And,
-            ley,
-            make_term(
-                Or,
-                make_term(Ge, util->term(y1), exp),
-                make_term(Ge, exp, util->term(y2))));
-    }
+    // y1 <= exponent <= y2
+    const auto exponent_in_bounds {make_term(Le, util->term(y1), exp, util->term(y2))};
+    // exponent > 0
+    const auto exponent_positive {make_term(Gt, exp, util->term(0))};
     if (base->is_value()) {
         const auto i {interpolate(t, 2, y1, y2)};
-        const auto premise = upper ? gey : ley;
+        const auto premise = upper ? exponent_in_bounds : exponent_positive;
         return make_term(
             Implies,
             premise,
@@ -398,32 +391,35 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
         const auto i2 {interpolate(at_y2, 1, x1, x2)};
         Term premise;
         if (upper) {
-            const auto gex {make_term(Le, util->term(x1), base, util->term(x2))};
-            premise = make_term(And, gex, gey);
+            // x1 <= base <= x2
+            const auto base_in_bounds {make_term(Le, util->term(x1), base, util->term(x2))};
+            premise = make_term(And, base_in_bounds, exponent_in_bounds);
         } else {
-            auto lex {make_term(Gt, base, util->term(0))};
-            if (x2 > x1 + 1) {
-                lex = make_term(
-                    And,
-                    lex,
-                    make_term(
-                        Or,
-                        make_term(Ge, util->term(x1), base),
-                        make_term(Ge, base, util->term(x2))));
-            }
-            premise = make_term(And, lex, ley);
+            // exponent >= y1
+            const auto exponent_above_threshold {make_term(Ge, exp, util->term(y1))};
+            // base > 0
+            const auto base_positive {make_term(Gt, base, util->term(0))};
+            premise = make_term(And, base_positive, exponent_above_threshold);
         }
-        const auto y_diff {util->term(y2 - y1)};
-        const auto conclusion {make_term(
-            op,
-            make_term(Mult, t, util->term(i1.factor), y_diff),
-            make_term(
-                Plus,
-                make_term(Mult, i1.t, y_diff),
+        Term conclusion;
+        if (y2 == y1) {
+            conclusion = make_term(
+                op,
+                make_term(Mult, t, util->term(i1.factor)),
+                i1.t);
+        } else {
+            const auto y_diff {util->term(y2 - y1)};
+            conclusion = make_term(
+                op,
+                make_term(Mult, t, util->term(i1.factor), y_diff),
                 make_term(
-                    Mult,
-                    make_term(Minus, i2.t, i1.t),
-                    make_term(Minus, exp, util->term(y1)))))};
+                    Plus,
+                    make_term(Mult, i1.t, y_diff),
+                    make_term(
+                        Mult,
+                        make_term(Minus, i2.t, i1.t),
+                        make_term(Minus, exp, util->term(y1)))));
+        }
         return make_term(Implies, premise, conclusion);
     }
 }
