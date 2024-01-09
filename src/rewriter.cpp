@@ -63,7 +63,8 @@ Term Rewriter::rewrite(Term t) {
                     changed = true;
                     TermVec bases;
                     for (const auto &e: set) {
-                        bases.push_back(*(++(++e->begin())));
+                        const auto [base, exp] {util.decompose_exp(e)};
+                        bases.push_back(base);
                     }
                     new_children.push_back(
                         util.solver->make_term(

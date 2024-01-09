@@ -88,6 +88,8 @@ int main(int argc, char *argv[]) {
                 config.get_lemmas = true;
             } else if (boost::iequals(argv[arg], "--log")) {
                 config.log = true;
+            } else if (boost::iequals(argv[arg], "--debug")) {
+                config.debug = true;
             } else if (boost::iequals(argv[arg], "--stats")) {
                 config.statistics = true;
             } else if (boost::iequals(argv[arg], "--version")) {

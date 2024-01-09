@@ -17,13 +17,12 @@ enum class Semantics {
 
 struct Config {
 
-    const static bool debug {false};
-
     bool validate_sat {false};
     std::optional<unsigned int> validate_unsat;
     bool log {false};
     bool statistics {false};
     bool get_lemmas {false};
+    bool debug {false};
     unsigned int rewrite_threshold {10};
     SolverKind solver_kind {SolverKind::Z3};
     Semantics semantics {Semantics::Total};

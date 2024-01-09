@@ -102,16 +102,18 @@ void Swine::symmetry_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     for (const auto &f: frames) {
         for (const auto &e: f.exps) {
             const auto ee {evaluate_exponential(e)};
-            if (ee->base_val < 0) {
-                base_symmetry_lemmas(e, sym_lemmas);
-            }
-            if (ee->exponent_val < 0) {
-                exp_symmetry_lemmas(e, sym_lemmas);
-            }
-            if (ee->base_val < 0 && ee->exponent_val < 0) {
-                const auto neg {util->make_exp(solver->make_term(Negate, ee->base), solver->make_term(Negate, ee->exponent))};
-                base_symmetry_lemmas(neg, sym_lemmas);
-                exp_symmetry_lemmas(neg, sym_lemmas);
+            if (ee) {
+                if (ee->base_val < 0) {
+                    base_symmetry_lemmas(e, sym_lemmas);
+                }
+                if (ee->exponent_val < 0) {
+                    exp_symmetry_lemmas(e, sym_lemmas);
+                }
+                if (ee->base_val < 0 && ee->exponent_val < 0) {
+                    const auto neg {util->make_exp(solver->make_term(Negate, ee->base), solver->make_term(Negate, ee->exponent))};
+                    base_symmetry_lemmas(neg, sym_lemmas);
+                    exp_symmetry_lemmas(neg, sym_lemmas);
+                }
             }
         }
     }
@@ -209,7 +211,7 @@ void Swine::compute_bounding_lemmas(const ExpGroup &g) {
             TermVec premises {make_term(Equal, base, util->term(0))};
             PrimOp op;
             if (config.semantics == Semantics::Total) {
-                premises.push_back(make_term(Distinct, base, util->term(0)));
+                premises.push_back(make_term(Distinct, exp, util->term(0)));
                 op = Equal;
             } else {
                 op = Implies;
@@ -340,19 +342,24 @@ Swine::Interpolant Swine::interpolate(Term t, const unsigned pos, const cpp_int 
     auto x {children[pos]};
     children[pos] = util->term(x1);
     const auto at_x1 {make_term(t->get_op(), children)};
-    children[pos] = util->term(x2);
-    const auto at_x2 {make_term(t->get_op(), children)};
     res.factor = abs(x2 - x1);
-    res.t = make_term(
-        Plus,
-        make_term(
-            Mult,
-            util->term(res.factor),
-            at_x1),
-        make_term(
-            Mult,
-            make_term(Minus, at_x2, at_x1),
-            make_term(Minus, x, util->term(x1))));
+    if (res.factor == 0) {
+        res.factor = 1;
+        res.t = at_x1;
+    } else {
+        children[pos] = util->term(x2);
+        const auto at_x2 {make_term(t->get_op(), children)};
+        res.t = make_term(
+            Plus,
+            make_term(
+                Mult,
+                util->term(res.factor),
+                at_x1),
+            make_term(
+                Mult,
+                make_term(Minus, at_x2, at_x1),
+                make_term(Minus, x, util->term(x1))));
+    }
     return res;
 }
 
@@ -388,7 +395,7 @@ Term Swine::interpolation_lemma(Term t, const bool upper, const std::pair<cpp_in
         const auto at_y1 {util->make_exp(base, util->term(y1))};
         const auto at_y2 {util->make_exp(base, util->term(y2))};
         const auto i1 {interpolate(at_y1, 1, x1, x2)};
-        const auto i2 {interpolate(at_y1, 1, x1, x2)};
+        const auto i2 {interpolate(at_y2, 1, x1, x2)};
         Term premise;
         if (upper) {
             const auto gex {make_term(Le, util->term(x1), base, util->term(x2))};
@@ -508,9 +515,9 @@ std::optional<Term> Swine::monotonicity_lemma(const EvaluatedExponential &e1, co
         Implies,
         make_term(
             And,
-            make_term(Lt, util->term(0), smaller.base),
+            make_term(Lt, util->term(1), smaller.base),
             make_term(
-                Le,
+                Lt,
                 util->term(0),
                 smaller.exponent),
             premise),
@@ -527,7 +534,7 @@ void Swine::monotonicity_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
         for (const auto &g: f.exp_groups) {
             for (const auto &e: g->maybe_non_neg_base()) {
                 const auto [base, exp] {util->decompose_exp(e)};
-                if (util->value(solver->get_value(base)) > 0 && util->value(solver->get_value(exp)) >= 0) {
+                if (util->value(solver->get_value(base)) > 1 && util->value(solver->get_value(exp)) > 0) {
                     exps.push_back(e);
                 }
             }
@@ -556,7 +563,7 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     for (auto f: frames) {
         for (auto e: f.exps) {
             const auto ee {evaluate_exponential(e)};
-            if (ee->exponent_val > 0 && ee->exp_expression_val % abs(ee->base_val) != 0) {
+            if (ee && ee->exponent_val > 0 && ee->exp_expression_val % abs(ee->base_val) != 0) {
                 auto l {make_term(
                     Equal,
                     util->term(0),
