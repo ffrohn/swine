@@ -432,14 +432,19 @@ void Swine::interpolation_lemma(const EvaluatedExponential &e, std::unordered_ma
         const auto min_exp = e.exponent_val > 1 ? e.exponent_val - 1 : e.exponent_val;
         lemma = interpolation_lemma(e.exp_expression, false, {min_base, min_exp}, {min_base + 1, min_exp + 1});
     } else {
-        std::pair<cpp_int, long long> nearest {1, 1};
-        auto min_dist {e.base_val * e.base_val + e.exponent_val * e.exponent_val};
-        for (const auto &[x, y]: vec) {
-            const auto x_dist {x - e.base_val};
-            const auto y_dist {y - e.exponent_val};
-            const auto dist {x_dist * x_dist + y_dist * y_dist};
-            if (0 < dist && dist <= min_dist) {
-                nearest = {x, y};
+        std::pair<cpp_int, long long> nearest;
+        if (vec.empty()) {
+            nearest = {e.base_val, e.exponent_val};
+        } else {
+            nearest = vec.front();
+            auto min_dist {e.base_val * e.base_val + e.exponent_val * e.exponent_val};
+            for (const auto &[x, y]: vec) {
+                const auto x_dist {x - e.base_val};
+                const auto y_dist {y - e.exponent_val};
+                const auto dist {x_dist * x_dist + y_dist * y_dist};
+                if (0 < dist && dist <= min_dist) {
+                    nearest = {x, y};
+                }
             }
         }
         lemma = interpolation_lemma(e.exp_expression, true, {e.base_val, e.exponent_val}, nearest);
