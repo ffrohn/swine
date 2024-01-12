@@ -63,21 +63,19 @@ void Swine::set_logic(const std::string logic) {
 }
 
 void Swine::add_lemma(const Term t, const LemmaKind kind) {
-    static Preprocessor preproc(*util);
     if (config.log) {
         std::cout << kind << " lemma:" << std::endl;
         std::cout << t << std::endl;
     }
-    const auto pp {preproc.preprocess(t)};
-    if (config.validate_unsat || config.get_lemmas) frames.back().lemmas.emplace(pp, kind);
+    if (config.validate_unsat || config.get_lemmas) frames.back().lemmas.emplace(t, kind);
     if (config.get_lemmas) {
         static unsigned int count {0};
         const auto assumption {make_symbol("assumption_" + std::to_string(count), solver->make_sort(BOOL))};
         ++count;
-        frames.back().assumptions.emplace(assumption, pp);
-        solver->assert_formula(solver->make_term(Equal, assumption, pp));
+        frames.back().assumptions.emplace(assumption, t);
+        solver->assert_formula(solver->make_term(Equal, assumption, t));
     } else {
-        solver->assert_formula(pp);
+        solver->assert_formula(t);
     }
     switch (kind) {
     case LemmaKind::Interpolation: ++stats.interpolation_lemmas;
@@ -118,9 +116,7 @@ void Swine::symmetry_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
         }
     }
     for (const auto &l: sym_lemmas) {
-        if (solver->get_value(l) != util->True) {
-            lemmas.emplace(l, LemmaKind::Symmetry);
-        }
+        lemmas.emplace(l, LemmaKind::Symmetry);
     }
 }
 
@@ -278,10 +274,7 @@ void Swine::bounding_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
                 const auto ee {evaluate_exponential(e)};
                 if (ee && ee->exp_expression_val != ee->expected_val && ee->base_val >= 0) {
                     for (const auto &l: f.bounding_lemmas.at(e)) {
-                        if (solver->get_value(l) != util->True) {
-                            lemmas.emplace(l, LemmaKind::Bounding);
-                            break;
-                        }
+                        lemmas.emplace(l, LemmaKind::Bounding);
                     }
                 }
             }
@@ -586,6 +579,18 @@ void Swine::mod_lemmas(std::unordered_map<Term, LemmaKind> &lemmas) {
     }
 }
 
+std::unordered_map<smt::Term, LemmaKind> Swine::preprocess_lemmas(const std::unordered_map<smt::Term, LemmaKind> &lemmas) {
+    static Preprocessor preproc(*util);
+    std::unordered_map<smt::Term, LemmaKind> res;
+    for (const auto &[l,k]: lemmas) {
+        const auto p {preproc.preprocess(l)};
+        if (solver->get_value(p) == util->False) {
+            res.emplace(p, k);
+        }
+    }
+    return res;
+}
+
 Result Swine::check_sat(TermVec assumptions) {
     Result res;
     for (const auto &f: frames) {
@@ -669,20 +674,23 @@ Result Swine::check_sat(TermVec assumptions) {
                     }
                     break;
                 }
-                if (lemmas.empty()) {
-                    symmetry_lemmas(lemmas);
-                }
+                symmetry_lemmas(lemmas);
+                lemmas = preprocess_lemmas(lemmas);
                 if (lemmas.empty()) {
                     bounding_lemmas(lemmas);
+                    lemmas = preprocess_lemmas(lemmas);
                 }
                 if (lemmas.empty()) {
                     monotonicity_lemmas(lemmas);
+                    lemmas = preprocess_lemmas(lemmas);
                 }
                 if (lemmas.empty()) {
                     mod_lemmas(lemmas);
+                    lemmas = preprocess_lemmas(lemmas);
                 }
                 if (lemmas.empty()) {
                     interpolation_lemmas(lemmas);
+                    lemmas = preprocess_lemmas(lemmas);
                 }
                 if (lemmas.empty()) {
                     if (config.is_active(LemmaKind::Interpolation)) {

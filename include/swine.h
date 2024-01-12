@@ -85,6 +85,7 @@ private:
     void verify() const;
     void brute_force();
     void add_lemma(const smt::Term lemma, const LemmaKind kind);
+    std::unordered_map<smt::Term, LemmaKind> preprocess_lemmas(const std::unordered_map<smt::Term, LemmaKind> &lemmas);
 
 public:
 
