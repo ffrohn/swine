@@ -16,7 +16,7 @@ Term Rewriter::rewrite(Term t) {
         if (util.is_abstract_exp(t)) {
             const auto base {children.at(1)};
             const auto exp {children.at(2)};
-            if ((base == util.term(1) && util.config.semantics == Semantics::Total) || exp == util.term(0)) {
+            if (exp == util.term(0)) {
                 res = util.term(1);
             } else if (exp == util.term(1) || (exp == util.term(-1) && util.config.semantics == Semantics::Total)) {
                 res = base;
