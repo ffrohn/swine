@@ -80,8 +80,8 @@ Term Rewriter::rewrite(Term t) {
                 res = util.solver->make_term(Mult, new_children);
             }
         } else if (t->get_op().prim_op == Pow && util.config.semantics == Semantics::Total) {
-            const auto fst {rewrite(*t->begin())};
-            const auto snd {rewrite(*std::next(t->begin()))};
+            const auto fst {children.at(1)};
+            const auto snd {children.at(2)};
             if (util.is_abstract_exp(fst) && snd->is_value() && util.value(snd) >= 0) {
                 const auto [base, exp] {util.decompose_exp(fst)};
                 res = util.make_exp(base, util.solver->make_term(Mult, exp, snd));
