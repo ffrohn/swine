@@ -6,18 +6,18 @@
 </head>
 
 SwInE (**S**MT **w**ith **In**teger **E**xponentiation) is an SMT solver with support for integer exponentation.
-To handle integer exponentation, it uses *counterexample guided abstraction refinement*.
-More specifically, it abstracts integer exponentiation with an uninterpreted function, inspects the models that are found by an underlying SMT solver with support for non-linear integer arithmetic and uninterpreted functions, and computes lemmas to eliminate those models if they violate the semantics of exponentiation.
+To handle integer exponentation, it uses *counterexample-guided abstraction refinement*.
+More precisely, it abstracts integer exponentiation with an uninterpreted function, inspects the models that are found by an underlying SMT solver with support for non-linear integer arithmetic and uninterpreted functions, and computes lemmas to eliminate those models if they violate the semantics of exponentiation.
 
-SwInE is build on top of [Smt-Switch](https://github.com/stanford-centaur/smt-switch) and uses the SMT solvers [Z3](https://github.com/Z3Prover/z3/), and [CVC5](https://cvc5.github.io/) as backends.
+SwInE is built on top of [SMT-Switch](https://github.com/stanford-centaur/smt-switch) and uses the SMT solvers [Z3](https://github.com/Z3Prover/z3/) and [CVC5](https://cvc5.github.io/) as backends.
 
 # Downloading SwInE
 
-[Here](https://github.com/ffrohn/swine/releases) you can find the latests releases of SwInE.
+[Here](https://github.com/ffrohn/swine/releases) you can find the latest releases of SwInE.
 
 # Input Format
 
-SwInE supports an extension of the [SMTLIB-format](https://smtlib.cs.uiowa.edu/) with an additional binary function symbol `exp`, whose arguments have to be of sort `Int`.
+SwInE supports an extension of the [SMT-LIB format](https://smtlib.cs.uiowa.edu/) with an additional binary function symbol `exp`, whose arguments have to be of sort `Int`.
 By default, the semantics of `exp(s,t)` is s<sup>|t|</sup>.
 Alternatively, SwInE supports *partial semantics* where `exp(s,t)` is treated like an uninterpreted function if `t` is negative.
 
