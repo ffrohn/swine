@@ -6,7 +6,7 @@ Preprocessor::Preprocessor(Util &util): util(util), rewriter(util), constant_pro
 
 Term Preprocessor::preprocess(Term term) {
     const auto log = [&](const Term term, const PreprocKind kind, const std::function<Term(Term)> &f){
-        static bool done {false};
+        bool done {false};
         const auto res {f(term)};
         if (util.config.log && res != term) {
             if (!done) {
@@ -59,6 +59,7 @@ Term Preprocessor::preprocess(Term term) {
             res = rterm;
         }
     }
+    if (util.config.log && term != res) std::cout << "preprocessing finished" << std::endl;
     return res;
 }
 
