@@ -16,8 +16,8 @@ namespace lemma_kind {
 static const std::unordered_set<LemmaKind> values {LemmaKind::Symmetry,
                                                   LemmaKind::Bounding,
                                                   LemmaKind::Interpolation,
-                                                  LemmaKind::Monotonicity,
-                                                  LemmaKind::Modulo};
+                                                  LemmaKind::Monotonicity};
+                                                  // LemmaKind::Modulo};
 
 std::string str(const LemmaKind k);
 
