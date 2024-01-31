@@ -47,11 +47,11 @@ FROM base as z3
 
 RUN xbps-install -yS python3-devel
 
-RUN wget https://github.com/Z3Prover/z3/archive/refs/tags/z3-4.12.2.tar.gz
-RUN tar xf z3-4.12.2.tar.gz
-WORKDIR /z3-z3-4.12.2
+RUN wget https://github.com/Z3Prover/z3/archive/refs/tags/z3-4.12.5.tar.gz
+RUN tar xf z3-4.12.5.tar.gz
+WORKDIR /z3-z3-4.12.5
 RUN mkdir build
-WORKDIR /z3-z3-4.12.2/build
+WORKDIR /z3-z3-4.12.5/build
 RUN cmake -DZ3_BUILD_LIBZ3_SHARED=FALSE -DCMAKE_BUILD_TYPE=Release ..
 RUN make -j
 RUN make install
@@ -126,7 +126,7 @@ RUN make install
 
 FROM base as smt-switch
 
-COPY --from=z3 /z3-z3-4.12.2 /z3
+COPY --from=z3 /z3-z3-4.12.5 /z3
 COPY --from=z3 /usr/local/include/z3*.h /usr/local/include/
 
 COPY --from=poly /usr/local/include/poly /usr/local/include/poly
