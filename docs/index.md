@@ -18,6 +18,9 @@ SwInE is built on top of [SMT-Switch](https://github.com/stanford-centaur/smt-sw
 # Input Format
 
 SwInE supports an extension of the [SMT-LIB format](https://smtlib.cs.uiowa.edu/) with an additional binary function symbol `exp`, whose arguments have to be of sort `Int`.
+[Here](./leading.smt2) you can find an example.
+Please use `(set-logic ALL)` to enable support for integer exponentiation.
+
 By default, the semantics of `exp(s,t)` is s<sup>|t|</sup>.
 Alternatively, SwInE supports *partial semantics* where `exp(s,t)` is treated like an uninterpreted function if `t` is negative.
 
