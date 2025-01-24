@@ -4,3 +4,4 @@ description: >- # this means to ignore newlines until "baseurl:"
   SwInE (<b>S</b>MT <b>w</b>ith <b>In</b>teger <b>E</b>xponentiation) is an SMT solver with support for integer exponentiation.
 github_username:  ffrohn
 theme: jekyll-theme-cayman
+github: false
