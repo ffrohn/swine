@@ -10,7 +10,7 @@ To handle integer exponentation, it uses *counterexample-guided abstraction refi
 More precisely, it abstracts integer exponentiation with an uninterpreted function, inspects the models that are found by an underlying SMT solver with support for non-linear integer arithmetic and uninterpreted functions, and computes lemmas to eliminate those models if they violate the semantics of exponentiation.
 
 There are two implementations of SwInE: The [original implementation](https://github.com/ffrohn/swine) is built on top of [SMT-Switch](https://github.com/stanford-centaur/smt-switch) and uses the SMT solvers [Z3](https://github.com/Z3Prover/z3/) and [CVC5](https://cvc5.github.io/) as backends.
-The [more efficient re-implementation](https://github.com/ffrohn/swine-z3), called SwInE-Z3, is built direclty on top of Z3.
+The [more efficient re-implementation](https://github.com/ffrohn/swine-z3), called SwInE-Z3, is built directly on top of Z3.
 
 # Downloading SwInE
 
