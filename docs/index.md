@@ -12,6 +12,11 @@ More precisely, it abstracts integer exponentiation with an uninterpreted functi
 There are two implementations of SwInE: The [original implementation](https://github.com/ffrohn/swine) is built on top of [SMT-Switch](https://github.com/stanford-centaur/smt-switch) and uses the SMT solvers [Z3](https://github.com/Z3Prover/z3/) and [CVC5](https://cvc5.github.io/) as backends.
 The [more efficient re-implementation](https://github.com/ffrohn/swine-z3), called SwInE-Z3, is built directly on top of Z3.
 
+# News
+
+* [This fork](https://github.com/Rc-Cookie/swine-z3) of SwInE features an implementation of a complete algorithm for a decidable fragment of integer arithmetic with exponentiation. It is based on the paper [The complexity of Presburger arithmetic with power or powers](https://arxiv.org/abs/2305.03037) by M. Benedikt, D. Chistikov, and A. Mansutti. We hope to merge it into the main development branch soon!
+* SwInE will be presented at the upcomming [SMT workshop](https://github.com/Rc-Cookie/swine-z3)!
+
 # Downloading SwInE
 
 [Here](https://github.com/ffrohn/swine-z3/releases) you can find the latest releases of SwInE-Z3, including nightly releases.
