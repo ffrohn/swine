@@ -16,9 +16,9 @@ There are two implementations of SwInE:
 
 # News
 
-* **29.09.2026** Exponentiation has been standardized in [SMT-LIB](https://smt-lib.org/theories-Ints.shtml)! The [current release of SwInE 2](https://github.com/ffrohn/swine-z3/releases/tag/v0.2.1) already implements the new standard.
-* **04.08.2025** [This fork](https://github.com/Rc-Cookie/swine-z3) of SwInE 2 features an implementation of a complete algorithm for a decidable fragment of integer arithmetic with exponentiation. It is based on the paper [The complexity of Presburger arithmetic with power or powers](https://arxiv.org/abs/2305.03037) by M. Benedikt, D. Chistikov, and A. Mansutti. We hope to merge it into the main development branch soon!
-* **04.08.2025** SwInE will be presented at the upcoming [SMT workshop](https://github.com/Rc-Cookie/swine-z3)!
+* **29.09.2026:** Exponentiation has been standardized in [SMT-LIB](https://smt-lib.org/theories-Ints.shtml)! The [current release of SwInE 2](https://github.com/ffrohn/swine-z3/releases/tag/v0.2.1) already implements the new standard.
+* **04.08.2025:** [This fork](https://github.com/Rc-Cookie/swine-z3) of SwInE 2 features an implementation of a complete algorithm for a decidable fragment of integer arithmetic with exponentiation. It is based on the paper [The complexity of Presburger arithmetic with power or powers](https://arxiv.org/abs/2305.03037) by M. Benedikt, D. Chistikov, and A. Mansutti. We hope to merge it into the main development branch soon!
+* **04.08.2025:** SwInE will be presented at the upcoming [SMT workshop](https://github.com/Rc-Cookie/swine-z3)!
 
 # Downloading SwInE
 
