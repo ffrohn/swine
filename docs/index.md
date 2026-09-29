@@ -29,7 +29,7 @@ There are two implementations of SwInE:
 
 ## SwInE 2
 
-SwInE 2 supports the full [SMT-LIB theory of integers](https://smt-lib.org/theories-Ints.shtml), including the binary function symbol `**` for exponentiation.
+SwInE 2 supports the SMT-LIB logic [QF_EIA](https://smt-lib.org/logics-all.shtml#QF_EIA), which includes a binary function symbol `**` for exponentiation.
 [Here](./leading2.smt2) you can find an example.
 Please use `(set-logic ALL)` to enable support for integer exponentiation.
 
