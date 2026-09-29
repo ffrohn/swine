@@ -33,7 +33,7 @@ SwInE 2 supports the full [SMT-LIB theory of integers](https://smt-lib.org/theor
 [Here](./leading2.smt2) you can find an example.
 Please use `(set-logic ALL)` to enable support for integer exponentiation.
 
-The semantics of `exp(s,t) = s`<sup>`t`</sup> if `s`<sup>`t`</sup> is an integer, and `exp(s,t) = 0`, otherwise.
+The semantics of `**` is `s ** t = s`<sup>`t`</sup> if `s`<sup>`t`</sup> is an integer, and `s ** t = 0`, otherwise.
 
 ## SwInE 1
 
@@ -41,7 +41,7 @@ SwInE 1 supports an extension of the SMT-LIB logic [QF_NIA](https://smt-lib.org/
 [Here](./leading1.smt2) you can find an example.
 Please use `(set-logic ALL)` to enable support for integer exponentiation.
 
-The semantics of `exp(s,t)` is s<sup>|t|</sup>.
+The semantics of `exp` is `exp(s,t) = s`<sup>`|t|`</sup>.
 
 # Using SwInE
 
